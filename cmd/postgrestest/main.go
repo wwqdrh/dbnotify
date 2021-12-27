@@ -49,8 +49,7 @@ func main() {
 	// fmt.Println(stmt.SQL.String()) //=> SELECT * FROM `users` WHERE `id` = $1 ORDER BY `id`
 	// fmt.Println(stmt.Vars)         //=> []interface{}{1}
 	// fmt.Println(stmt.Dest)
-	err := db.Exec(`UPDATE "company" SET "name"='new_name' WHERE id = 1`).Error
-	fmt.Println(err)
+	// stmt = db.Session(&gorm.Session{DryRun: true}).Exec(`UPDATE "company" SET "name"="new_name" WHERE id = 1`).Statement
 
 	// fmt.Println(stmt.SQL.String()) //=> SELECT * FROM `users` WHERE `id` = $1 ORDER BY `id`
 	// fmt.Println(stmt.Vars)         //=> []interface{}{1}
@@ -58,16 +57,16 @@ func main() {
 
 	// op.RegisterDBCallback(db)
 
-	// // // 新增
-	// db.Create(&Company{
-	// 	Name:    "张三",
-	// 	Age:     19,
-	// 	Address: "home",
-	// 	Salary:  100,
-	// })
-	// // // 修改
-	// // db.Model(&Company{}).Where("name=?", "张三").Update("age", "21")
-	// // // 删除
-	// db.Where("name=?", "张三").Delete(&Company{})
+	// // 新增
+	db.Create(&Company{
+		Name:    "张三",
+		Age:     19,
+		Address: "home",
+		Salary:  100,
+	})
+	// // 修改
+	// db.Model(&Company{}).Where("name=?", "张三").Update("age", "21")
+	// // 删除
+	db.Where("name=?", "张三").Delete(&Company{})
 
 }

@@ -76,7 +76,7 @@ func RegisterDBCallback(db *gorm.DB) {
 	// db.Callback().Create().Before("gorm:create").After("gorm:before_create").Register("my_plugin:before_create", beforeCreate)
 
 	// before any other callbacks
-	db.Callback().Raw().Before("gorm:raw").Register("update_created_at", beforeCreate)
+	// db.Callback().Create().Before("*").Register("update_created_at", updateCreated)
 
 	// after any other callbacks
 	// db.Callback().Create().After("*").Register("update_created_at", updateCreated)
@@ -90,7 +90,6 @@ func beforeCreate(db *gorm.DB) {
 		fmt.Println(db.Statement.Table)          // 获取表名
 		fmt.Println(db.Statement.Schema.DBNames) // 获取字段名
 	}
-	fmt.Println(db.Statement.SQL)
 	fmt.Println("beforecreate")
 	fmt.Println(db.Statement.Dest)
 	fmt.Println(db.Statement.Vars...)
