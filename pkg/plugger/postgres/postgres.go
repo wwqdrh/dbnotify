@@ -1,4 +1,4 @@
-package orm
+package postgres
 
 import (
 	"database/sql"
@@ -137,5 +137,10 @@ func (d *PostgresDriver) Migrator(value ...interface{}) error {
 // ExecSQL 直接执行sql语句
 func (d *PostgresDriver) ExecSQL(sql string, values ...interface{}) error {
 	d.DB.Exec(sql, values...)
+	return nil
+}
+
+// CreateTrigger 创建触发器，
+func (d *PostgresDriver) CreateTrigger() error {
 	return nil
 }
