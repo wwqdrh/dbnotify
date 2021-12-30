@@ -3,6 +3,7 @@ package postgres
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -15,8 +16,9 @@ import (
 
 // PostgresDriver Postgres的连接管理器
 type PostgresDriver struct {
-	config *PostgresConfig
-	DB     *gorm.DB
+	config  *PostgresConfig
+	DB      *gorm.DB
+	Trigger *TriggerCore
 }
 
 func NewPostgresDriver(account string, password string, host string, db string) (*PostgresDriver, error) {
@@ -115,6 +117,7 @@ func (d *PostgresDriver) Initalial(name string) error {
 	sqlDB.SetConnMaxLifetime(d.config.ConnMaxLifetime)
 
 	d.DB = db
+	d.Trigger = NewTriggerCore(db)
 	return nil
 }
 
@@ -140,7 +143,22 @@ func (d *PostgresDriver) ExecSQL(sql string, values ...interface{}) error {
 	return nil
 }
 
-// CreateTrigger 创建触发器，
+// CreateTrigger 创建触发器
+// 提供表名 操作类型 额外操作 自动生成所需要的sql创建触发器
 func (d *PostgresDriver) CreateTrigger() error {
 	return nil
+}
+
+func (d *PostgresDriver) AddColumn(tableName string, columnName string, columnType string) error {
+	sql := fmt.Sprintf(`
+DO
+$do$
+BEGIN
+IF (SELECT COUNT(*) AS ct1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%s' AND COLUMN_NAME = '%s' ) = 0
+THEN
+   ALTER TABLE %s ADD COLUMN %s %s not null;
+END IF;
+END;
+$do$`, tableName, columnName, tableName, columnName, columnType)
+	return d.DB.Exec(sql).Error
 }

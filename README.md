@@ -177,6 +177,12 @@ PostgreSQL 在实现逻辑复制的同时，已经提供了一切 CDC 所需要�
 
 # 方案修改 2
 
+1、完成表注册后，策略的初始化步骤、触发器的创建、备份表的创建
+2、后台轮询处理备份表查看操作记录在 sqlite3/mongodb 中，并且惰性删除数据库中的过期数据
+3、提供控制器，供前端调用，包括查看某个表的更改历史记录
+4、提供修改表的接口
+5、前端页面
+
 只需要记录核心的数据表以及字段，当发生 update、delete、insert 的操作的时候记录一下操作情况。
 
 然后提供一个公共接口用于修改表的字段，某些行的值，添加数据之类的操作
@@ -189,24 +195,18 @@ PostgreSQL 在实现逻辑复制的同时，已经提供了一切 CDC 所需要�
 
 -- 函数触发器
 CREATE TRIGGER name { BEFORE | AFTER } { event [ OR ... ] } ON table [ FOR [ EACH ] { ROW | STATEMENT } ] EXECUTE PROCEDURE funcname ( arguments )
-函数触发器:
-CREATE OR REPLACE function del_xuesheng() RETURNS TRIGGER AS $DELETE$
 
-BEGIN
+SELECT * FROM pg_trigger;
 
-DELETE FROM XUE_SHENG WHERE B_ID = OLD.id;
+drop trigger example_trigger on company;
 
-RETURN OLD;
-
-END;
- $DELETE$
-
+表删除后能够自动删除触发器，不过函数无法删除，需要手动删除触发器函数
 
 --- [修改触发器]: 如果函数返回空则不会执行触发器函数
 create or replace function before_update() returns trigger as $$
 declare
 begin
-  EXECUTE format('INSERT INTO %I.%I ("name", "age", "address", "salary", "action") VALUES (%s, %s, %s, %s, %s)'
+  EXECUTE format('INSERT INTO %I.%I ("name", "age", "address", "salary", "action") VALUES (%L, %L, %L, %L, %L)'
                 , TG_TABLE_SCHEMA, TG_TABLE_NAME || '_1', OLD.name, OLD.age, old.address, OLD.salary, 'before_update')
   using old;
   return old;
@@ -216,7 +216,7 @@ $$ language plpgsql;
 create or replace function after_update() returns trigger as $$
 declare
 begin
-    EXECUTE format('INSERT INTO %I.%I ("name", "age", "address", "salary", "action") VALUES (%s, %s, %s, %s, %s)'
+    EXECUTE format('INSERT INTO %I.%I ("name", "age", "address", "salary", "action") VALUES (%L, %L, %L, %L, %L)'
                 , TG_TABLE_SCHEMA, TG_TABLE_NAME || '_1', NEW.name, NEW.age, NEW.address, NEW.salary, 'after_update')
     using new;
     return new;
@@ -230,35 +230,96 @@ create trigger companyafterupdate after update on company for each row execute p
 create or replace function before_insert() returns trigger as $$
 declare
 begin
-
+    return new;
 end
 $$ language plpgsql;
 
 create or replace function after_insert() returns trigger as $$
 declare
 begin
-
+	EXECUTE format('INSERT INTO %I.%I ("name", "age", "address", "salary", "action") VALUES (%L, %L, %L, %L, %L)'
+                , TG_TABLE_SCHEMA, TG_TABLE_NAME || '_1', NEW.name, NEW.age, NEW.address, NEW.salary, 'after_insert')
+    return new;
 end
 $$ language plpgsql;
-create trigger companybeforeupdate before insert on company for each row execute procedure before_insert();
-create trigger companyafterupdate after insert on company for each row execute procedure after_insert();
+create trigger companybeforeinsert before insert on company for each row execute procedure before_insert();
+create trigger companyafterinsert after insert on company for each row execute procedure after_insert();
 
 --- [delete触发器]
 create or replace function before_delete() returns trigger as $$
 declare
 begin
-
+	EXECUTE format('INSERT INTO %I.%I ("name", "age", "address", "salary", "action") VALUES (%L, %L, %L, %L, %L)'
+                , TG_TABLE_SCHEMA, TG_TABLE_NAME || '_1', old.name, old.age, old.address, old.salary, 'befor_delete')
+    using old;
+    return old;
 end
 $$ language plpgsql;
 
 create or replace function after_delete() returns trigger as $$
 declare
 begin
-
+	return old;
 end
 $$ language plpgsql;
-create trigger companybeforeupdate before delete on company for each row execute procedure before_delete();
-create trigger companyafterupdate after delete on company for each row execute procedure after_delete();
+create trigger companybeforedelete before delete on company for each row execute procedure before_delete();
+create trigger companyafterdelete after delete on company for each row execute procedure after_delete();
 ```
 
 2、生成临时数据表，比如更新前获取字段值，更新后获取字段值，添加到备份表中。然后后台某个线程池对备份数据表请求获取值后删除掉，并将操作日志记录根据缓存策略来解析操作出来后存放到版本库中
+
+## 方案修改 3
+
+日志记录表直接存在触发器所提供的表上，该表字段包括 id log(json 格式，存储着日志记录)
+
+要查看历史所有日志 那么就直接读取，里面包含了整行的数据，它的操作
+
+1、[delete]删除: 整行就是删除的数据，直接进行展示
+2、[add]添加: 整行就是添加的数据，直接进行展示
+3、[modify]修改: 包含修改前的数据，修改后的数据
+4、[truncate]修改字段: 原始的字段名字，新的字段名字
+
+```SQL
+-- 只需要一个存储逻辑，适配所有的操作，并将数据存储到对应的[table]_log中
+
+create or replace FUNCTION auto_log_recored() RETURNS trigger   
+	LANGUAGE plpgsql
+    AS $$
+    declare logjson JSON;
+    BEGIN
+        --只有update的时候有OLD，所以必须判断操作类型为UPDATE
+        IF (TG_OP = 'UPDATE') THEN
+            --如果用户名被修改了，就插入到日志，并记录新、旧名字
+        	SELECT json_build_object(
+                'before', json_agg(old),
+                'after', json_agg(new)
+            ) into logjson;
+            
+            INSERT INTO "company_log" ("log", "action", "time") VALUES (logjson, 'update' , CURRENT_TIMESTAMP);
+        END IF;
+        IF (TG_OP = 'DELETE') then
+        	select json_build_object('data', json_agg(old)) into logjson;
+            INSERT INTO "company_log" ("log", "action", "time") VALUES (logjson, 'delete', CURRENT_TIMESTAMP);
+        END IF;
+        IF (TG_OP = 'INSERT') then
+        	select json_build_object('data', json_agg(new)) into logjson; 
+            INSERT INTO "company_log" ("log", "action", "time") VALUES (logjson, 'insert', CURRENT_TIMESTAMP);
+        END IF;
+    RETURN NEW;
+END$$;
+
+create trigger company_datalog after insert or update or delete on company for each row execute procedure auto_log_recored();
+```
+
+IF (TG_OP = 'TRUNCATE') THEN
+INSERT INTO "user_log" ("log", "action", "timestamp")
+VALUE (row_to_json(old), "truncate", CURRENT_TIMESTAMP);
+END IF;
+
+查询日志的时候惰性删除
+
+## 方案修改4
+
+定时任务读取log中的日志表 然后处理完存储到leveldb中，每个表存放一个文件
+
+然后后端查询数据就是按照leveldb中的数据进行查找
