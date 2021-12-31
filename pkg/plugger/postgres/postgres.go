@@ -41,6 +41,14 @@ func NewPostgresDriverWithConfig(config *PostgresConfig) (*PostgresDriver, error
 	return driver, nil
 }
 
+//
+func (d *PostgresDriver) GetTableName(table interface{}) string {
+	stmt := &gorm.Statement{DB: d.DB}
+	stmt.Parse(table)
+	tableName := stmt.Schema.Table
+	return tableName
+}
+
 // Ping 连通性测试 可以不指定数据库
 func (d *PostgresDriver) Ping() error {
 	if _, err := gorm.Open(postgres.Open(d.config.DryDNS()), &gorm.Config{

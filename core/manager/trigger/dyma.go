@@ -1,9 +1,9 @@
 package trigger
 
 import (
+	"datamanager/core/manager/model"
 	"datamanager/pkg/plugger/postgres"
 	"fmt"
-	"time"
 
 	"gorm.io/gorm"
 )
@@ -18,14 +18,6 @@ type (
 		logTableName string
 		driver       *postgres.PostgresDriver
 		outdate      int // 过期天数 用来处理触发器中的惰性删除机制
-	}
-
-	LogTable struct {
-		ID        int           `gorm:"PRIMARY_KEY;AUTO_INCREMENT"`
-		TableName string        `gorm:"table_name"`
-		Log       postgres.JSON `gorm:"TYPE:json"`
-		Action    string
-		Time      time.Time
 	}
 )
 
@@ -49,7 +41,7 @@ func NewDymaTriggerPolicy(
 
 // 为表创建log表字段是固定的
 func (p *DymaTriggerPolicy) Initial(this postgres.ITriggerPolicy) error {
-	return p.driver.DB.Table(p.logTableName).AutoMigrate(&LogTable{})
+	return p.driver.DB.Table(p.logTableName).AutoMigrate(&model.LogTable{})
 } // 初始化
 
 func (p *DymaTriggerPolicy) UpdateConfig(conf map[string]interface{}) {
@@ -108,7 +100,7 @@ create trigger %s after insert or update or delete on company for each row execu
 
 // 一次性返回所有的trigger
 // TODO: 增加truncate的触发器逻辑
-func (p *DymaTriggerPolicy) GetAllTrigger() string {
+func (p *DymaTriggerPolicy) GetAllTrigger(tableName string) string {
 	funcName := p.tableName + "_auto_log_recored()"
 	triggerName := p.GetTriggerName(p, p.tableName, postgres.BEFORE_UPDATE)
 

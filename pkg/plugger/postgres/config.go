@@ -19,7 +19,7 @@ type PostgresConfig struct {
 	// ParseTime bool   // true
 	Loc string // Local
 
-	PostgresConnectionPool
+	*PostgresConnectionPool
 }
 type PostgresConnectionPool struct {
 	MaxIdleConns    int
@@ -36,12 +36,29 @@ func NewPostgresConfig(account, password, host, db string) *PostgresConfig {
 		DBName:   db,
 		Charset:  "utf8",
 		Loc:      "Local",
-		PostgresConnectionPool: PostgresConnectionPool{
+		PostgresConnectionPool: &PostgresConnectionPool{
 			MaxIdleConns:    10,
 			MaxOpenConns:    100,
 			ConnMaxLifetime: time.Hour,
 		},
 	}
+}
+
+func (c *PostgresConfig) Init() *PostgresConfig {
+	if c.Charset == "" {
+		c.Charset = "utf8"
+	}
+	if c.Loc == "" {
+		c.Loc = "Local"
+	}
+	if c.PostgresConnectionPool == nil {
+		c.PostgresConnectionPool = &PostgresConnectionPool{
+			MaxIdleConns:    10,
+			MaxOpenConns:    100,
+			ConnMaxLifetime: time.Hour,
+		}
+	}
+	return c
 }
 
 func (c *PostgresConfig) SetDBName(value string) *PostgresConfig {

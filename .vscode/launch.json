@@ -10,6 +10,13 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/postgrestest/main.go"
+        },
+        {
+            "name": "leveldb",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/leveldb/main.go"
         }
     ]
 }

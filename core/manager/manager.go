@@ -1,91 +1,76 @@
 package manager
 
 import (
-	"datamanager/core/manager/logger"
 	"datamanager/core/manager/model"
-	"datamanager/core/manager/trigger"
 	"datamanager/pkg/plugger/postgres"
 	"errors"
 	"strings"
 	"time"
-
-	"gorm.io/gorm"
 )
 
 var (
-	policyRepo  model.Policy  = model.Policy{} // repository
-	versionRepo model.Version = model.Version{}
-
 	allPolicy map[string]*model.Policy = make(map[string]*model.Policy)
 )
 
 type (
 	ManagerCore struct {
-		targetDB      *postgres.PostgresDriver
-		versionDB     *gorm.DB
-		loggerPolicy  logger.ILogger
-		triggerPolicy postgres.ITriggerPolicy
-		logTableName  string
+		*ManagerConf
 	}
 )
 
-func NewManagerCore(targetDB *postgres.PostgresDriver, versionDB *gorm.DB) *ManagerCore {
+func NewManagerCore(conf *ManagerConf) *ManagerCore {
 	return &ManagerCore{
-		logTableName: "data_version_log",
-		targetDB:     targetDB,
-		versionDB:    versionDB,
-		loggerPolicy: logger.NewDefaultLogger(),
+		ManagerConf: conf,
 	}
 }
 
-// 自动构建表结构 policy表
+// 自动处理需要的表结构
 func (m *ManagerCore) AutoMigrate() {
-	policyRepo.Migrate(m.versionDB)
+	model.PolicyRepo.Migrate(m.VersionDB.DB)
 	// 读取策略
-	for _, item := range policyRepo.GetAllData(m.versionDB) {
+	for _, item := range model.PolicyRepo.GetAllData(m.VersionDB.DB) {
 		allPolicy[item.TableName] = item
 	}
 
 	// 根据策略再继续生成对应的版本数据表
 	for _, item := range allPolicy {
-		versionRepo.MigrateWithName(m.versionDB, item.TableName+"_version")
+		model.VersionRepo.MigrateWithName(m.VersionDB.DB, item.TableName+"_version")
 	}
+
+	// 添加日志表
+	m.TargetDB.DB.Table(m.LogTableName).AutoMigrate(model.LogTableRepo)
 }
 
 // 注册新的数据表
 // 需要对表创建触发器 如果表已经存在触发器了则不要再创建了 操作postgres
 // 可以记录下创建触发器的时间
 func (m *ManagerCore) Register(table interface{}) error {
-	stmt := &gorm.Statement{DB: m.versionDB}
-	stmt.Parse(table)
-	tableName := stmt.Schema.Table
+	tableName := m.TargetDB.GetTableName(table)
 	if tableName == "" {
 		return errors.New("表名不能为空")
 	}
 	if _, ok := allPolicy[tableName]; !ok {
-		versionRepo.MigrateWithName(m.versionDB, tableName+"_version")
+		// versionRepo.MigrateWithName(m.versionDB, tableName+"_version")
 		// 添加policy策略 首先需要判断table_name是否存在
-		policy := &model.Policy{TableName: tableName, Outdate: 15}
-		if err := policyRepo.CreateNoExist(
-			m.versionDB, policy,
+		policy := &model.Policy{TableName: tableName, Outdate: m.OutDate}
+		if err := model.PolicyRepo.CreateNoExist(
+			m.VersionDB.DB, policy,
 			map[string]interface{}{"table_name": tableName},
 		); err != nil {
 			return err
 		}
 		allPolicy[tableName] = policy
 	}
-	// m.targetDB.Trigger.CreateTrigger(
-	// 	trigger.NewTriggerPolicy(m.targetDB, table),
-	// 	[]postgres.TriggerType{postgres.BEFORE_UPDATE, postgres.AFTER_UPDATE, postgres.AFTER_CREATE, postgres.BEFORE_DELETE},
-	// )
 
-	m.triggerPolicy = trigger.NewDymaTriggerPolicy(m.targetDB, m.logTableName, table, allPolicy[tableName].Outdate)
-	m.targetDB.Trigger.CreateTrigger(
-		m.triggerPolicy,
+	// m.TriggerPolicy = trigger.NewDymaTriggerPolicy(m.TargetDB, m.LogTableName, table, allPolicy[tableName].Outdate)
+	m.TargetDB.Trigger.CreateTrigger(
+		m.TriggerPolicy,
 		tableName,
 		[]postgres.TriggerType{postgres.ALL},
 	)
-	m.loggerPolicy.SetSenseFields(strings.Split(allPolicy[tableName].Fields, ","))
+	m.LoggerPolicy.SetSenseFields(tableName, strings.Split(allPolicy[tableName].Fields, ","))
+
+	m.LoggerPolicy.Run(tableName, strings.Split(allPolicy[tableName].Fields, ","), allPolicy[tableName].Outdate)
 
 	return nil
 }
@@ -99,20 +84,20 @@ func (m *ManagerCore) ListTable() []string {
 	return res
 }
 
-// ListTableLog 获取指定表的所有历史记录
-func (m *ManagerCore) ListTableLog(tableName string, startTime *time.Time, endTime *time.Time) ([]*trigger.LogTable, error) {
-	res := []*trigger.LogTable{}
+// ListTableLog 从postgres中获取 获取指定表的所有历史记录
+func (m *ManagerCore) ListTableLog(tableName string, startTime *time.Time, endTime *time.Time) ([]*model.LogTable, error) {
+	res := []*model.LogTable{}
 
 	if startTime == nil {
-		if err := m.targetDB.DB.Table(m.logTableName).Where("table_name = ?", tableName).Find(&res).Error; err != nil {
+		if err := m.TargetDB.DB.Table(m.LogTableName).Where("table_name = ?", tableName).Find(&res).Error; err != nil {
 			return nil, err
 		}
 	} else if endTime == nil {
-		if err := m.targetDB.DB.Where("table_name = ?", tableName).Where("time > ?", startTime).Find(&res).Error; err != nil {
+		if err := m.TargetDB.DB.Where("table_name = ?", tableName).Where("time > ?", startTime).Find(&res).Error; err != nil {
 			return nil, err
 		}
 	} else {
-		if err := m.targetDB.DB.Where("table_name = ?", tableName).Where("time > ?", startTime).Where("time < ", endTime).Find(&res).Error; err != nil {
+		if err := m.TargetDB.DB.Where("table_name = ?", tableName).Where("time > ?", startTime).Where("time < ", endTime).Find(&res).Error; err != nil {
 			return nil, err
 		}
 	}
@@ -120,9 +105,15 @@ func (m *ManagerCore) ListTableLog(tableName string, startTime *time.Time, endTi
 	return res, nil
 }
 
+// 从leveldb中获取
+func (m *ManagerCore) ListTableLog2(tableName string, startTime *time.Time, endTime *time.Time) (map[string]interface{}, error) {
+	fields := strings.Split(allPolicy[tableName].Fields, ",")
+	return m.LoggerPolicy.GetLogger(tableName+"_log.db", fields, startTime, endTime)
+}
+
 // 将数据库中的日志数据格式转换成通用的
-func (m *ManagerCore) AdapterLog(logData []*trigger.LogTable, fields ...string) (interface{}, error) {
-	return m.loggerPolicy.Dump(logData, fields...)
+func (m *ManagerCore) AdapterLog(logData []*model.LogTable, fields ...string) (interface{}, error) {
+	return m.LoggerPolicy.Dump(logData, fields...)
 }
 
 // 修改表的trigger
@@ -134,21 +125,21 @@ func (m *ManagerCore) ModifyTrigger(tableName string, outdate int) error {
 		return nil
 	}
 
-	if err := m.targetDB.Trigger.DeleteTrigger(m.triggerPolicy, tableName, postgres.BEFORE_UPDATE); err != nil {
-		return err
-	}
-	m.triggerPolicy.UpdateConfig(map[string]interface{}{"outdate": outdate})
+	// if err := m.TargetDB.Trigger.DeleteTrigger(m.TriggerPolicy, tableName, postgres.BEFORE_UPDATE); err != nil {
+	// 	return err
+	// }
+	m.TriggerPolicy.UpdateConfig(map[string]interface{}{"outdate": outdate})
 	allPolicy[tableName].Outdate = outdate
-	if err := m.versionDB.Save(allPolicy[tableName]).Error; err != nil {
+	if err := m.VersionDB.DB.Save(allPolicy[tableName]).Error; err != nil {
 		return err
 	}
-	if err := m.targetDB.Trigger.CreateTrigger(
-		m.triggerPolicy,
-		tableName,
-		[]postgres.TriggerType{postgres.BEFORE_UPDATE},
-	); err != nil {
-		return errors.New("创建trigger失败")
-	}
+	// if err := m.TargetDB.Trigger.CreateTrigger(
+	// 	m.TriggerPolicy,
+	// 	tableName,
+	// 	[]postgres.TriggerType{postgres.BEFORE_UPDATE},
+	// ); err != nil {
+	// 	return errors.New("创建trigger失败")
+	// }
 
 	return nil
 }
@@ -160,8 +151,8 @@ func (m *ManagerCore) ModifyField(tableName string, fields []string) error {
 	}
 	policy := allPolicy[tableName]
 	policy.Fields = strings.Join(fields, ",")
-	m.loggerPolicy.SetSenseFields(fields)
-	return m.versionDB.Save(policy).Error
+	m.LoggerPolicy.SetSenseFields(tableName, fields)
+	return m.VersionDB.DB.Save(policy).Error
 }
 
 // 根据表名和字段名查找整个历史记录中所关心的字段发生了哪些变化
@@ -175,35 +166,8 @@ func (m *ManagerCore) ListTableByName(tableName string, fieldNames ...string) (i
 		return nil, err
 	}
 	return data, nil
-	// [
-	// 	{
-	// 		"action": "update",
-	// 		"log": {
-	// 			"data": {
-	// 				"age": {
-	// 					"after": 20,
-	// 					"before": 18
-	// 				}
-	// 			}
-	// 		},
-	// 		"time": "2021-12-30T14:50:39.80038+08:00"
-	// 	},
-	// 	{
-	// 		"action": "update",
-	// 		"log": {
-	// 			"data": {}
-	// 		},
-	// 		"time": "2021-12-30T14:51:00.795+08:00"
-	// 	},
-	// 	{
-	// 		"action": "delete",
-	// 		"log": {
-	// 			"data": {
-	// 				"age": 20,
-	// 				"name": "saan"
-	// 			}
-	// 		},
-	// 		"time": "2021-12-30T16:14:31.751899+08:00"
-	// 	}
-	// ],
+}
+
+func (m *ManagerCore) ListTableByName2(tableName string, fieldNames ...string) (interface{}, error) {
+	return m.ListTableLog2(tableName+"_log.db", nil, nil)
 }

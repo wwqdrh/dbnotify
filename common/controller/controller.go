@@ -86,7 +86,7 @@ func ListHistoryByName(c *gin.Context) {
 		return
 	}
 
-	logs, err := common.Mana.ListTableLog(request.TableName, request.StartTime, request.EndTime)
+	logs, err := common.Mana.ListTableLog2(request.TableName, request.StartTime, request.EndTime)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  false,
@@ -94,18 +94,11 @@ func ListHistoryByName(c *gin.Context) {
 		})
 	}
 
-	if data, err := common.Mana.AdapterLog(logs); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  false,
-			"message": err.Error(),
-		})
-	} else {
-		c.JSON(http.StatusOK, gin.H{
-			"status":  true,
-			"message": "查询成功",
-			"data":    data,
-		})
-	}
+	c.JSON(http.StatusOK, gin.H{
+		"status":  true,
+		"message": "查询成功",
+		"data":    logs,
+	})
 }
 
 type (
@@ -137,7 +130,7 @@ func ListHistoryByField(c *gin.Context) {
 		return
 	}
 
-	logs, err := common.Mana.ListTableByName(request.TableName, request.FieldName...)
+	logs, err := common.Mana.ListTableByName2(request.TableName, request.FieldName...)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  false,

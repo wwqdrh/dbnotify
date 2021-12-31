@@ -24,9 +24,9 @@ type (
 		UpdateConfig(map[string]interface{}) // 修改配置的接口
 		GetPrefix(ITriggerPolicy) string     // 获取前缀
 		GetTriggerName(ITriggerPolicy, string, TriggerType) string
-		GetTriggerSql(ITriggerPolicy, TriggerType) string
+		GetTriggerSql(ITriggerPolicy, TriggerType, string) string
 		GetAllTriggerName(ITriggerPolicy) []string // 获取所有的trigger名字
-		GetAllTrigger() string
+		GetAllTrigger(tableName string) string
 		BeforeUpdateTrigger() string
 		AfterUpdateTrigger() string
 		BeforeDeleteTrigger() string
@@ -91,7 +91,7 @@ func (t *TriggerCore) CreateTrigger(policy ITriggerPolicy, tableName string, tTy
 			continue
 		}
 
-		triggerSQL += policy.GetTriggerSql(policy, item)
+		triggerSQL += policy.GetTriggerSql(policy, item, tableName)
 	}
 
 	if err := t.db.Exec(triggerSQL).Error; err != nil {
@@ -166,7 +166,7 @@ func (DefaultTriggerPolicy) GetAllTriggerName(this ITriggerPolicy) []string {
 	return res
 } // 获取所有的trigger名字
 
-func (DefaultTriggerPolicy) GetTriggerSql(this ITriggerPolicy, tType TriggerType) string {
+func (DefaultTriggerPolicy) GetTriggerSql(this ITriggerPolicy, tType TriggerType, tableName string) string {
 	switch tType {
 	case BEFORE_CREATE:
 		return this.BeforeInsertTrigger()
@@ -187,7 +187,7 @@ func (DefaultTriggerPolicy) GetTriggerSql(this ITriggerPolicy, tType TriggerType
 	case INSERT:
 		return this.InsertTrigger()
 	case ALL:
-		return this.GetAllTrigger()
+		return this.GetAllTrigger(tableName)
 	default:
 		return ""
 	}
@@ -211,8 +211,8 @@ func (p DefaultTriggerPolicy) BeforeInsertTrigger() string {
 func (p DefaultTriggerPolicy) AfterInsertTrigger() string {
 	return ""
 }
-func (p DefaultTriggerPolicy) UpdateTrigger() string   { return "" }
-func (p DefaultTriggerPolicy) InsertTrigger() string   { return "" }
-func (p DefaultTriggerPolicy) DeleteTrigger() string   { return "" }
-func (p DefaultTriggerPolicy) TruncateTrigger() string { return "" }
-func (p DefaultTriggerPolicy) GetAllTrigger() string   { return "" }
+func (p DefaultTriggerPolicy) UpdateTrigger() string                 { return "" }
+func (p DefaultTriggerPolicy) InsertTrigger() string                 { return "" }
+func (p DefaultTriggerPolicy) DeleteTrigger() string                 { return "" }
+func (p DefaultTriggerPolicy) TruncateTrigger() string               { return "" }
+func (p DefaultTriggerPolicy) GetAllTrigger(tableName string) string { return "" }

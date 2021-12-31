@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"datamanager/common"
+	"datamanager"
 	"datamanager/common/controller"
+	"datamanager/pkg/plugger/postgres"
 	"fmt"
 	"log"
 	"net/http"
@@ -29,14 +30,16 @@ func (Company) TableName() string {
 
 func main() {
 	// 数据库初始化操作 后面可以修改句柄创建的方法
-	errs := common.InitApp()
+	errs := datamanager.Register(&postgres.PostgresConfig{
+		Account:  "postgres",
+		Password: "postgres",
+		Host:     "office.zx-tech.net:5433",
+		DBName:   "hui_dm_test",
+	}, &Company{})
 	if len(errs) > 0 {
 		fmt.Println(errs)
 		return
 	}
-
-	// 表结构的初始化
-	fmt.Println(common.Register(Company{})) // 注册开启监控功能
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {

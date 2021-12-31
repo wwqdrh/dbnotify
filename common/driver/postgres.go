@@ -10,9 +10,9 @@ var PostgresDriver *postgres.PostgresDriver
 var postgresOnce = sync.Once{}
 
 // 初始化driver
-func InitPostgresDriver() (e error) {
+func InitPostgresDriver(config *postgres.PostgresConfig) (e error) {
 	postgresOnce.Do(func() {
-		driver, err := postgres.NewPostgresDriver("postgres", "postgres", "office.zx-tech.net:5433", "hui_dm_test")
+		driver, err := postgres.NewPostgresDriverWithConfig(config)
 		if err != nil {
 			e = err
 		} else {
