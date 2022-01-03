@@ -56,6 +56,8 @@ type (
 		TableName string     `form:"table_name" json:"table_name" binding:"required"`
 		StartTime *time.Time `form:"start_time"`
 		EndTime   *time.Time `form:"end_time"`
+		Page      int        `json:"page"`
+		PageSize  int        `json:"page_size"`
 	}
 	ListHistoryByNameResponse struct {
 		Log    map[string]interface{} `json:"log"`
@@ -86,12 +88,13 @@ func ListHistoryByName(c *gin.Context) {
 		return
 	}
 
-	logs, err := common.Mana.ListTableLog2(request.TableName, request.StartTime, request.EndTime)
+	logs, err := common.Mana.ListTableLog2(request.TableName, request.StartTime, request.EndTime, request.Page, request.PageSize)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  false,
 			"message": err.Error(),
 		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -103,8 +106,12 @@ func ListHistoryByName(c *gin.Context) {
 
 type (
 	ListHistoryByFieldRequest struct {
-		TableName string   `json:"table_name" binding:"required"`
-		FieldName []string `json:"field_name" binding:"required"`
+		TableName string     `json:"table_name" binding:"required"`
+		FieldName []string   `json:"field_name" binding:"required"`
+		StartTime *time.Time `form:"start_time"`
+		EndTime   *time.Time `form:"end_time"`
+		Page      int        `json:"page"`
+		PageSize  int        `json:"page_size"`
 	}
 )
 
@@ -130,12 +137,13 @@ func ListHistoryByField(c *gin.Context) {
 		return
 	}
 
-	logs, err := common.Mana.ListTableByName2(request.TableName, request.FieldName...)
+	logs, err := common.Mana.ListTableByName2(request.TableName, request.FieldName, request.StartTime, request.EndTime, request.Page, request.PageSize)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  false,
 			"message": err.Error(),
 		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

@@ -71,7 +71,7 @@ func (l *LevelDBDriver) IteratorByPrefix(dbName string, prefix string) (map[stri
 	return res, nil
 }
 
-func (l *LevelDBDriver) IteratorByRange(dbName string, start, end string) ([][]byte, error) {
+func (l *LevelDBDriver) IteratorByRange(dbName string, start, end string) ([][]map[string]interface{}, error) {
 	db, ok := l.dbMap[dbName]
 	if !ok {
 		var err error
@@ -81,17 +81,22 @@ func (l *LevelDBDriver) IteratorByRange(dbName string, start, end string) ([][]b
 		}
 	}
 
-	values := [][]byte{}
+	values := [][]map[string]interface{}{}
 	iter := db.NewIterator(&util.Range{Start: []byte(start), Limit: []byte(end)}, nil)
 	for iter.Next() {
-		values = append(values, iter.Value())
+		curItem := []map[string]interface{}{}
+		json.Unmarshal(iter.Value(), &curItem)
+		values = append(values, curItem)
 	}
 	iter.Release()
 	err := iter.Error()
 	if err != nil {
 		return nil, err
 	}
-	return values[1:], nil
+	if len(values) >= 1 {
+		return values[1:], nil
+	}
+	return nil, nil
 }
 
 // 写入数据 找给定key判断能否找到 能找到的话按照数组的格式往后添加数据

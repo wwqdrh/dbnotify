@@ -3,7 +3,6 @@ package model
 import (
 	"datamanager/pkg/datautil"
 	"datamanager/pkg/plugger/leveldb"
-	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -103,23 +102,24 @@ func (l LocalLog) removeRecord(dbName, date, field string, day int) error {
 }
 
 // SearchRecord 按照字段名 以及开始结束时间进行搜索
-func (l LocalLog) SearchRecord(dbName string, fields []string, start, end *time.Time) (map[string]interface{}, error) {
-	res := map[string]interface{}{}
+func (l LocalLog) SearchRecordByField(dbName string, fields []string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+	res := []map[string]interface{}{}
 	for _, field := range fields {
 		var item []map[string]interface{}
-		var citem []map[string]interface{}
 		if start == nil && end == nil {
 			startstr, endstr := l.GetKeyPin(field), l.GetLastKeyPin(field)
 			data, err := l.db.IteratorByRange(dbName, startstr, endstr)
 			if err != nil {
 				return nil, err
 			}
+			if data == nil {
+				continue
+			}
 			for _, i := range data {
-				err := json.Unmarshal(i, &citem)
-				if err != nil {
-					return nil, err
+				for _, c := range i {
+					c["field"] = field
+					item = append(item, c)
 				}
-				item = append(item, citem...)
 			}
 		} else if start == nil && end != nil {
 			startstr, endstr := l.GetKeyPin(field), l.GetKeyBuilder(field, datautil.ParseTime(end)[:10])
@@ -128,16 +128,30 @@ func (l LocalLog) SearchRecord(dbName string, fields []string, start, end *time.
 				return nil, err
 			}
 			for _, i := range data {
-				err := json.Unmarshal(i, &citem)
-				if err != nil {
-					return nil, err
+				for _, c := range i {
+					c["field"] = field
+					item = append(item, c)
 				}
-				item = append(item, citem...)
 			}
 
 		}
-		res[field] = item
+		res = append(res, item...)
 	}
 
-	return res, nil
+	if page == 0 {
+		page = 1
+	}
+	switch {
+	case pageSize > 100:
+		pageSize = 100
+	case pageSize <= 0:
+		pageSize = 10
+	}
+	offset := (page - 1) * pageSize
+	maxItem := offset + pageSize
+	if maxItem > len(res) {
+		maxItem = len(res)
+	}
+
+	return res[offset:maxItem], nil
 }

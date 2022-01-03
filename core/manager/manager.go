@@ -63,6 +63,7 @@ func (m *ManagerCore) Register(table interface{}) error {
 	}
 
 	// m.TriggerPolicy = trigger.NewDymaTriggerPolicy(m.TargetDB, m.LogTableName, table, allPolicy[tableName].Outdate)
+	m.TargetDB.DB.AutoMigrate(table)
 	m.TargetDB.Trigger.CreateTrigger(
 		m.TriggerPolicy,
 		tableName,
@@ -106,9 +107,9 @@ func (m *ManagerCore) ListTableLog(tableName string, startTime *time.Time, endTi
 }
 
 // 从leveldb中获取
-func (m *ManagerCore) ListTableLog2(tableName string, startTime *time.Time, endTime *time.Time) (map[string]interface{}, error) {
+func (m *ManagerCore) ListTableLog2(tableName string, startTime *time.Time, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	fields := strings.Split(allPolicy[tableName].Fields, ",")
-	return m.LoggerPolicy.GetLogger(tableName+"_log.db", fields, startTime, endTime)
+	return m.LoggerPolicy.GetLogger(tableName+"_log.db", fields, startTime, endTime, page, pageSize)
 }
 
 // 将数据库中的日志数据格式转换成通用的
@@ -156,18 +157,18 @@ func (m *ManagerCore) ModifyField(tableName string, fields []string) error {
 }
 
 // 根据表名和字段名查找整个历史记录中所关心的字段发生了哪些变化
-func (m *ManagerCore) ListTableByName(tableName string, fieldNames ...string) (interface{}, error) {
-	logs, err := m.ListTableLog(tableName, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	data, err := m.AdapterLog(logs, fieldNames...)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
-}
+// func (m *ManagerCore) ListTableByName(tableName string, fieldNames []string, page, pageSize int) (interface{}, error) {
+// 	logs, err := m.ListTableLog(tableName, nil, nil)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	data, err := m.AdapterLog(logs, fieldNames...)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return data, nil
+// }
 
-func (m *ManagerCore) ListTableByName2(tableName string, fieldNames ...string) (interface{}, error) {
-	return m.ListTableLog2(tableName+"_log.db", nil, nil)
+func (m *ManagerCore) ListTableByName2(tableName string, fields []string, startTime, endTime *time.Time, page, pageSize int) (interface{}, error) {
+	return m.LoggerPolicy.GetLogger(tableName+"_log.db", fields, startTime, endTime, page, pageSize)
 }
