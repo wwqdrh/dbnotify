@@ -181,7 +181,7 @@ func ModifyTableTime(c *gin.Context) {
 		return
 	}
 
-	if err := common.Mana.ModifyTrigger(request.TableName, request.OutDate); err != nil {
+	if err := common.Mana.ModifyOutdate(request.TableName, request.OutDate); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  false,
 			"message": err.Error(),

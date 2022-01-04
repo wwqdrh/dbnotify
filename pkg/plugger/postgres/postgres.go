@@ -170,3 +170,9 @@ END;
 $do$`, tableName, columnName, tableName, columnName, columnType)
 	return d.DB.Exec(sql).Error
 }
+
+func (d *PostgresDriver) GetPrimary(table interface{}) []string {
+	stmt := &gorm.Statement{DB: d.DB}
+	stmt.Parse(table)
+	return stmt.Schema.PrimaryFieldDBNames
+}

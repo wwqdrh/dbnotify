@@ -5,6 +5,7 @@ import (
 	"datamanager/pkg/datautil"
 	"datamanager/pkg/plugger/leveldb"
 	"datamanager/pkg/plugger/postgres"
+	"strings"
 	"time"
 )
 
@@ -17,16 +18,18 @@ type (
 		task         map[string]bool // 当前任务的存储
 		targetDb     *leveldb.LevelDBDriver
 		logTableName string
+		getPolicy    func(string) interface{} // 根据tableName获取配置
 	}
 )
 
-func NewDefaultLogger(sourceDB *postgres.PostgresDriver, targetDB *leveldb.LevelDBDriver, logTableName string) ILogger {
+func NewDefaultLogger(sourceDB *postgres.PostgresDriver, targetDB *leveldb.LevelDBDriver, logTableName string, getPolicy func(string) interface{}) ILogger {
 	return &DefaultLogger{
 		sourceDb:     sourceDB,
 		targetDb:     targetDB,
 		senseFields:  map[string][]string{},
 		task:         map[string]bool{},
 		logTableName: logTableName,
+		getPolicy:    getPolicy,
 	}
 }
 
@@ -34,12 +37,12 @@ func (l *DefaultLogger) SetSenseFields(tableName string, data []string) {
 	l.senseFields[tableName] = data
 }
 
-func (l DefaultLogger) Dump(logData []*model.LogTable, fields ...string) ([]map[string]interface{}, error) {
+func (l DefaultLogger) Dump(logData []*model.LogTable, primaryFields []string, fields ...string) ([]map[string]interface{}, error) {
 	response := make([]map[string]interface{}, 0, len(logData))
 
 	for _, item := range logData {
 		data, _ := datautil.JsonToMap(string(item.Log))
-		log := l.wash(data, item.Action, l.senseFields[item.TableName]...)
+		log := l.wash(data, item.Action, primaryFields, l.senseFields[item.TableName]...)
 		if log == nil {
 			continue
 		}
@@ -54,14 +57,16 @@ func (l DefaultLogger) Dump(logData []*model.LogTable, fields ...string) ([]map[
 }
 
 // update的log中是before与after两个字段，delete与insert是一个data字段
-func (l DefaultLogger) wash(data map[string]interface{}, action string, fieldNames ...string) map[string]interface{} {
+func (l DefaultLogger) wash(data map[string]interface{}, action string, primaryFields []string, fieldNames ...string) map[string]interface{} {
 	if len(fieldNames) == 0 {
 		return data
 	}
 
 	switch action {
 	case "update":
+		res := map[string]interface{}{} // data, primary
 		fields := map[string]interface{}{}
+		primaryData := map[string]interface{}{} // 主键的数据
 		beforeDatas, ok := data["before"].([]interface{})
 		if !ok {
 			return nil
@@ -84,29 +89,27 @@ func (l DefaultLogger) wash(data map[string]interface{}, action string, fieldNam
 				}
 			}
 		}
-		if len(fields) == 0 {
-			return nil
-		}
-		return fields
-	case "insert":
-		fields := map[string]interface{}{}
+		for _, item := range primaryFields {
+			beforeItem := beforeDatas[0].(map[string]interface{})
+			afterItem := afterDatas[0].(map[string]interface{})
 
-		oriDatas, ok := data["data"].([]interface{})
-		if !ok {
-			return nil
-		}
-		for _, item := range fieldNames {
-			curItem := oriDatas[0].(map[string]interface{})
-			if val, ok := curItem[item]; ok {
-				fields[item] = val
+			beforeVal, _ := beforeItem[item]
+			afterVal, _ := afterItem[item]
+			primaryData[item] = map[string]interface{}{
+				"before": beforeVal,
+				"after":  afterVal,
 			}
 		}
 		if len(fields) == 0 {
 			return nil
 		}
-		return fields
-	case "delete":
+		res["data"] = fields
+		res["primary"] = primaryData
+		return res
+	case "insert":
+		res := map[string]interface{}{} // data, primary
 		fields := map[string]interface{}{}
+		primaryData := map[string]interface{}{} // 主键的数据
 		oriDatas, ok := data["data"].([]interface{})
 		if !ok {
 			return nil
@@ -117,10 +120,44 @@ func (l DefaultLogger) wash(data map[string]interface{}, action string, fieldNam
 				fields[item] = val
 			}
 		}
+		for _, item := range primaryFields {
+			curItem := oriDatas[0].(map[string]interface{})
+			if val, ok := curItem[item]; ok {
+				primaryData[item] = val
+			}
+		}
 		if len(fields) == 0 {
 			return nil
 		}
-		return fields
+		res["data"] = fields
+		res["primary"] = primaryData
+		return res
+	case "delete":
+		res := map[string]interface{}{} // data, primary
+		fields := map[string]interface{}{}
+		primaryData := map[string]interface{}{} // 主键的数据
+		oriDatas, ok := data["data"].([]interface{})
+		if !ok {
+			return nil
+		}
+		for _, item := range fieldNames {
+			curItem := oriDatas[0].(map[string]interface{})
+			if val, ok := curItem[item]; ok {
+				fields[item] = val
+			}
+		}
+		for _, item := range primaryFields {
+			curItem := oriDatas[0].(map[string]interface{})
+			if val, ok := curItem[item]; ok {
+				primaryData[item] = val
+			}
+		}
+		if len(fields) == 0 {
+			return nil
+		}
+		res["data"] = fields
+		res["primary"] = primaryData
+		return res
 	default:
 		return nil
 	}
@@ -130,8 +167,15 @@ func (l DefaultLogger) Run(tableName string, fields []string, outdate int) {
 	if _, ok := l.task[tableName]; ok {
 		return
 	}
-	l.task[tableName] = true
+	policy := (l.getPolicy(tableName)).(*model.Policy)
+	primaryFields := strings.Split(policy.PrimaryFields, ",")
+	senseFields := strings.Split(policy.Fields, ",")
 
+	if len(senseFields) == 0 || senseFields[0] == "" {
+		return // 未设置监听字段
+	}
+
+	l.task[tableName] = true
 	fn := func() error {
 		// 执行读取表的逻辑 每次读200行
 		data, err := model.LogTableRepo.ReadAndDeleteByID(l.sourceDb.DB, l.logTableName, tableName, 200)
@@ -140,7 +184,7 @@ func (l DefaultLogger) Run(tableName string, fields []string, outdate int) {
 			return err
 		}
 
-		datar, err := l.Dump(data, fields...)
+		datar, err := l.Dump(data, primaryFields, fields...)
 		if err != nil {
 			delete(l.task, tableName)
 			return err

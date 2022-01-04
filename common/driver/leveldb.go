@@ -10,7 +10,7 @@ var leveldbOnce = sync.Once{}
 
 func InitLevelDBDriver() (e error) {
 	leveldbOnce.Do(func() {
-		driver, err := leveldb.NewLevelDBDriver()
+		driver, err := leveldb.NewLevelDBDriver("version")
 		if err != nil {
 			e = err
 		} else {

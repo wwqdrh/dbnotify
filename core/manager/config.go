@@ -28,7 +28,13 @@ func (c *ManagerConf) Init() *ManagerConf {
 		c.OutDate = 15
 	}
 	if c.LoggerPolicy == nil {
-		c.LoggerPolicy = logger.NewDefaultLogger(c.TargetDB, c.LogDB, c.LogTableName)
+		c.LoggerPolicy = logger.NewDefaultLogger(c.TargetDB, c.LogDB, c.LogTableName, func(s1 string) interface{} {
+			if policy, ok := allPolicy[s1]; !ok {
+				return nil
+			} else {
+				return policy
+			}
+		})
 	}
 	if c.TriggerPolicy == nil {
 		c.TriggerPolicy = trigger.NewDefaultTrigger(c.TargetDB, c.LogTableName)

@@ -309,12 +309,30 @@ create or replace FUNCTION auto_log_recored() RETURNS trigger
 END$$;
 
 create trigger company_datalog after insert or update or delete on company for each row execute procedure auto_log_recored();
-```
 
-IF (TG_OP = 'TRUNCATE') THEN
-INSERT INTO "user_log" ("log", "action", "timestamp")
-VALUE (row_to_json(old), "truncate", CURRENT_TIMESTAMP);
-END IF;
+
+create or replace function f_truncate_f()
+returns trigger
+language plpgsql as $function$
+    BEGIN
+        RAISE NOTICE 'NEW: %', NEW;
+          RAISE NOTICE 'TG_RELID: %', TG_RELID;
+          RAISE NOTICE 'TG_TABLE_SCHEMA: %', TG_TABLE_SCHEMA;
+          RAISE NOTICE 'TG_TABLE_NAME: %', TG_TABLE_NAME;
+          RAISE NOTICE 'TG_RELNAME: %', TG_RELNAME;
+          RAISE NOTICE 'TG_OP: %', TG_OP;
+          RAISE NOTICE 'TG_WHEN: %', TG_WHEN;
+          RAISE NOTICE 'TG_LEVEL: %', TG_LEVEL;
+          RAISE NOTICE 'TG_NARGS: %', TG_NARGS;
+          RAISE NOTICE 'TG_ARGV: %', TG_ARGV;
+          RAISE NOTICE ' TG_ARGV[0]: %', TG_ARGV[0];
+
+        RETURN NULL;
+    END;
+$function$;
+
+create trigger company_trigger_log after truncate on company for each statement execute function f_truncate_f();
+```
 
 查询日志的时候惰性删除
 
@@ -325,3 +343,43 @@ END IF;
 然后后端查询数据就是按照leveldb中的数据进行查找
 
 需要按照日期以及字段名字 key=日期-字段
+
+
+### 功能
+
+``` sql
+#新建一个捕捉truncate的表和触发器函数,TRUNCATE只能定义STATEMENT级别的触发器，也就是说只会捕捉该条语句，不会捕捉表的数据变更，而且不支持row级别的触发器，所以表就算写了要插入OLD.*,也不会有数据写入。
+
+CREATE TABLE tbl_trigger_truncate_record(
+    operation         text   NOT NULL,
+    create_time       timestamp NOT NULL,
+    userid            text      NOT NULL,
+    table_name   text,
+    a           bigint,
+    b 			text
+);
+
+CREATE OR REPLACE FUNCTION f_trigger_audit_truncate()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+    BEGIN
+        IF  (TG_OP = 'TRUNCATE') THEN
+        INSERT INTO tbl_trigger_truncate_record SELECT 'truncate', now(), current_user,TG_TABLE_NAME,OLD.*;
+        END IF;
+        RETURN NULL;
+    END;
+$function$;
+
+create trigger t_truncate  AFTER truncate  ON tbl_hank_trigger 
+FOR EACH STATEMENT EXECUTE FUNCTION f_trigger_audit_truncate();
+
+hank=> truncate table tbl_hank_trigger;
+TRUNCATE TABLE
+hank=> select * from tbl_trigger_truncate_record;
+ operation |        create_time         | userid |    table_name    | a | b 
+-----------+----------------------------+--------+------------------+---+---
+ truncate  | 2021-04-19 11:44:28.029128 | hank   | tbl_hank_trigger |   | 
+(1 row)
+
+```

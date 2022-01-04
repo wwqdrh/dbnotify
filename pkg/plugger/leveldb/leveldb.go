@@ -3,6 +3,7 @@ package leveldb
 import (
 	"encoding/json"
 	"errors"
+	"path"
 
 	goleveldb "github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -14,11 +15,13 @@ type LevelDBDriver struct {
 	dsn       string // 数据库地址 leveldb是文件数据库 传入文件地址
 	initialed bool   // 标识是否初始化
 	dbMap     map[string]*goleveldb.DB
+	prefix    string
 }
 
-func NewLevelDBDriver() (*LevelDBDriver, error) {
+func NewLevelDBDriver(prefix string) (*LevelDBDriver, error) {
 	return &LevelDBDriver{
-		dbMap: map[string]*goleveldb.DB{},
+		dbMap:  map[string]*goleveldb.DB{},
+		prefix: prefix,
 	}, nil
 }
 
@@ -26,7 +29,12 @@ func (l *LevelDBDriver) Initalial() error {
 	return nil
 }
 
+func (l *LevelDBDriver) GetDBName(dbName string) string {
+	return path.Join(l.prefix, dbName)
+}
+
 func (l *LevelDBDriver) GetDB(dbName string) (*goleveldb.DB, error) {
+	dbName = l.GetDBName(dbName)
 	if val, ok := l.dbMap[dbName]; ok {
 		return val, nil
 	}
@@ -48,6 +56,7 @@ func (l *LevelDBDriver) Close() error {
 
 // 根据前缀获取key，value
 func (l *LevelDBDriver) IteratorByPrefix(dbName string, prefix string) (map[string][]byte, error) {
+	dbName = l.GetDBName(dbName)
 	db, ok := l.dbMap[dbName]
 	if !ok {
 		var err error
@@ -72,6 +81,7 @@ func (l *LevelDBDriver) IteratorByPrefix(dbName string, prefix string) (map[stri
 }
 
 func (l *LevelDBDriver) IteratorByRange(dbName string, start, end string) ([][]map[string]interface{}, error) {
+	dbName = l.GetDBName(dbName)
 	db, ok := l.dbMap[dbName]
 	if !ok {
 		var err error
@@ -101,6 +111,7 @@ func (l *LevelDBDriver) IteratorByRange(dbName string, start, end string) ([][]m
 
 // 写入数据 找给定key判断能否找到 能找到的话按照数组的格式往后添加数据
 func (l *LevelDBDriver) WriteByArray(dbName string, key string, value interface{}) error {
+	dbName = l.GetDBName(dbName)
 	db, ok := l.dbMap[dbName]
 	if !ok {
 		return errors.New("未初始化数据库")
@@ -130,6 +141,7 @@ func (l *LevelDBDriver) WriteByArray(dbName string, key string, value interface{
 }
 
 func (l *LevelDBDriver) GetArrJson(dbName string, key string) ([]map[string]interface{}, error) {
+	dbName = l.GetDBName(dbName)
 	db, ok := l.dbMap[dbName]
 	if !ok {
 		var err error
@@ -153,6 +165,7 @@ func (l *LevelDBDriver) GetArrJson(dbName string, key string) ([]map[string]inte
 }
 
 func (l *LevelDBDriver) Get(dbName, key string) ([]byte, error) {
+	dbName = l.GetDBName(dbName)
 	db, ok := l.dbMap[dbName]
 	if !ok {
 		var err error
@@ -170,6 +183,7 @@ func (l *LevelDBDriver) Get(dbName, key string) ([]byte, error) {
 }
 
 func (l *LevelDBDriver) Put(dbName, key string, value []byte) error {
+	dbName = l.GetDBName(dbName)
 	db, ok := l.dbMap[dbName]
 	if !ok {
 		return errors.New("未初始化数据库")
@@ -182,6 +196,7 @@ func (l *LevelDBDriver) Put(dbName, key string, value []byte) error {
 }
 
 func (l *LevelDBDriver) GetJson(dbName, key string) (map[string]interface{}, error) {
+	dbName = l.GetDBName(dbName)
 	db, ok := l.dbMap[dbName]
 	if !ok {
 		var err error
@@ -205,6 +220,7 @@ func (l *LevelDBDriver) GetJson(dbName, key string) (map[string]interface{}, err
 }
 
 func (l *LevelDBDriver) WriteJson(dbName string, key string, value interface{}) error {
+	dbName = l.GetDBName(dbName)
 	db, ok := l.dbMap[dbName]
 	if !ok {
 		return errors.New("未初始化数据库")
@@ -219,6 +235,7 @@ func (l *LevelDBDriver) WriteJson(dbName string, key string, value interface{}) 
 }
 
 func (l *LevelDBDriver) Remove(dbName string, start string, end string) error {
+	dbName = l.GetDBName(dbName)
 	db, ok := l.dbMap[dbName]
 	if !ok {
 		return errors.New("未初始化数据库")

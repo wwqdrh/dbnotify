@@ -18,6 +18,10 @@ type (
 	}
 )
 
+func GetAllPolicy() map[string]*model.Policy {
+	return allPolicy
+}
+
 func NewManagerCore(conf *ManagerConf) *ManagerCore {
 	return &ManagerCore{
 		ManagerConf: conf,
@@ -50,9 +54,8 @@ func (m *ManagerCore) Register(table interface{}) error {
 		return errors.New("表名不能为空")
 	}
 	if _, ok := allPolicy[tableName]; !ok {
-		// versionRepo.MigrateWithName(m.versionDB, tableName+"_version")
-		// 添加policy策略 首先需要判断table_name是否存在
-		policy := &model.Policy{TableName: tableName, Outdate: m.OutDate}
+		primaryFields := strings.Join(m.TargetDB.GetPrimary(table), ",")
+		policy := &model.Policy{TableName: tableName, PrimaryFields: primaryFields, Outdate: m.OutDate}
 		if err := model.PolicyRepo.CreateNoExist(
 			m.VersionDB.DB, policy,
 			map[string]interface{}{"table_name": tableName},
@@ -85,40 +88,17 @@ func (m *ManagerCore) ListTable() []string {
 	return res
 }
 
-// ListTableLog 从postgres中获取 获取指定表的所有历史记录
-func (m *ManagerCore) ListTableLog(tableName string, startTime *time.Time, endTime *time.Time) ([]*model.LogTable, error) {
-	res := []*model.LogTable{}
-
-	if startTime == nil {
-		if err := m.TargetDB.DB.Table(m.LogTableName).Where("table_name = ?", tableName).Find(&res).Error; err != nil {
-			return nil, err
-		}
-	} else if endTime == nil {
-		if err := m.TargetDB.DB.Where("table_name = ?", tableName).Where("time > ?", startTime).Find(&res).Error; err != nil {
-			return nil, err
-		}
-	} else {
-		if err := m.TargetDB.DB.Where("table_name = ?", tableName).Where("time > ?", startTime).Where("time < ", endTime).Find(&res).Error; err != nil {
-			return nil, err
-		}
-	}
-
-	return res, nil
-}
-
 // 从leveldb中获取
 func (m *ManagerCore) ListTableLog2(tableName string, startTime *time.Time, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+	if _, ok := allPolicy[tableName]; !ok {
+		return nil, errors.New("表未注册")
+	}
 	fields := strings.Split(allPolicy[tableName].Fields, ",")
 	return m.LoggerPolicy.GetLogger(tableName+"_log.db", fields, startTime, endTime, page, pageSize)
 }
 
-// 将数据库中的日志数据格式转换成通用的
-func (m *ManagerCore) AdapterLog(logData []*model.LogTable, fields ...string) (interface{}, error) {
-	return m.LoggerPolicy.Dump(logData, fields...)
-}
-
 // 修改表的trigger
-func (m *ManagerCore) ModifyTrigger(tableName string, outdate int) error {
+func (m *ManagerCore) ModifyOutdate(tableName string, outdate int) error {
 	if _, ok := allPolicy[tableName]; !ok {
 		return errors.New("表未注册")
 	}
@@ -126,21 +106,11 @@ func (m *ManagerCore) ModifyTrigger(tableName string, outdate int) error {
 		return nil
 	}
 
-	// if err := m.TargetDB.Trigger.DeleteTrigger(m.TriggerPolicy, tableName, postgres.BEFORE_UPDATE); err != nil {
-	// 	return err
-	// }
 	m.TriggerPolicy.UpdateConfig(map[string]interface{}{"outdate": outdate})
 	allPolicy[tableName].Outdate = outdate
 	if err := m.VersionDB.DB.Save(allPolicy[tableName]).Error; err != nil {
 		return err
 	}
-	// if err := m.TargetDB.Trigger.CreateTrigger(
-	// 	m.TriggerPolicy,
-	// 	tableName,
-	// 	[]postgres.TriggerType{postgres.BEFORE_UPDATE},
-	// ); err != nil {
-	// 	return errors.New("创建trigger失败")
-	// }
 
 	return nil
 }
@@ -156,19 +126,9 @@ func (m *ManagerCore) ModifyField(tableName string, fields []string) error {
 	return m.VersionDB.DB.Save(policy).Error
 }
 
-// 根据表名和字段名查找整个历史记录中所关心的字段发生了哪些变化
-// func (m *ManagerCore) ListTableByName(tableName string, fieldNames []string, page, pageSize int) (interface{}, error) {
-// 	logs, err := m.ListTableLog(tableName, nil, nil)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	data, err := m.AdapterLog(logs, fieldNames...)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return data, nil
-// }
-
 func (m *ManagerCore) ListTableByName2(tableName string, fields []string, startTime, endTime *time.Time, page, pageSize int) (interface{}, error) {
+	if _, ok := allPolicy[tableName]; !ok {
+		return nil, errors.New("表未注册")
+	}
 	return m.LoggerPolicy.GetLogger(tableName+"_log.db", fields, startTime, endTime, page, pageSize)
 }

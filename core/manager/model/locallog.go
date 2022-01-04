@@ -34,11 +34,9 @@ func (l LocalLog) Write(tableName string, data []map[string]interface{}, fields 
 
 	// // 字段-时间戳 需要先加一个字段-0000的分界线方便删除
 	for _, item := range data {
-		// field 不是action 而是监听到的字段
-		// wash(item.Action)
 		logs := item["log"].(map[string]interface{})
 		datetime := datautil.ParseTime(item["time"].(*time.Time))[:10]
-		for field := range logs {
+		for field := range logs["data"].(map[string]interface{}) {
 			l.AddLog(dbName, datetime, field, item, outdate)
 		}
 	}

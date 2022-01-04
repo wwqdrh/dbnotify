@@ -31,11 +31,11 @@ func (Company) TableName() string {
 func main() {
 	// 数据库初始化操作 后面可以修改句柄创建的方法
 	errs := datamanager.Register(&postgres.PostgresConfig{
-		Account: "postgres",
-		// Password: "postgres",
-		Password: "123456",
-		// Host:     "office.zx-tech.net:5433",
-		Host:   "localhost:5432",
+		Account:  "postgres",
+		Password: "postgres",
+		// Password: "123456",
+		Host: "office.zx-tech.net:5433",
+		// Host:   "localhost:5432",
 		DBName: "hui_dm_test",
 	}, &Company{})
 	if len(errs) > 0 {

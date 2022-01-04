@@ -8,10 +8,11 @@ import (
 
 // policyModel 模型的表结构
 type Policy struct {
-	ID        int    `gorm:"PRIMARY_KEY;AUTO_INCREMENT"`
-	TableName string `gorm:"index"` // 数据表的名字
-	Fields    string // 需要进行触发的数据 a,b,c,d的格式
-	Outdate   int    // 单位天数 默认为1个月
+	ID            int    `gorm:"PRIMARY_KEY;AUTO_INCREMENT"`
+	TableName     string `gorm:"index"` // 数据表的名字
+	PrimaryFields string `gorm:"primary_fields"`
+	Fields        string // 需要进行触发的数据 a,b,c,d的格式
+	Outdate       int    // 单位天数 默认为1个月
 }
 
 // 构造表结构
