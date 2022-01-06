@@ -34,5 +34,5 @@ func InitApp(targetDB *postgres.PostgresConfig) (errs []error) {
 }
 
 func AddTable(table interface{}) error {
-	return Mana.Register(table)
+	return Mana.Register(table, false)
 }

@@ -5,17 +5,18 @@ import (
 	"datamanager/pkg/datautil"
 	"datamanager/pkg/plugger/leveldb"
 	"datamanager/pkg/plugger/postgres"
+	"errors"
 	"strings"
+	"sync"
 	"time"
 )
 
 // 日志格式转换
-
 type (
 	DefaultLogger struct {
 		senseFields  map[string][]string //
 		sourceDb     *postgres.PostgresDriver
-		task         map[string]bool // 当前任务的存储
+		task         *sync.Map // string=>bool 当前任务的存储
 		targetDb     *leveldb.LevelDBDriver
 		logTableName string
 		getPolicy    func(string) interface{} // 根据tableName获取配置
@@ -27,7 +28,7 @@ func NewDefaultLogger(sourceDB *postgres.PostgresDriver, targetDB *leveldb.Level
 		sourceDb:     sourceDB,
 		targetDb:     targetDB,
 		senseFields:  map[string][]string{},
-		task:         map[string]bool{},
+		task:         &sync.Map{},
 		logTableName: logTableName,
 		getPolicy:    getPolicy,
 	}
@@ -163,44 +164,45 @@ func (l DefaultLogger) wash(data map[string]interface{}, action string, primaryF
 	}
 }
 
-func (l DefaultLogger) Run(tableName string, fields []string, outdate int) {
-	if _, ok := l.task[tableName]; ok {
-		return
+func (l DefaultLogger) Run(tableName string, fields []string, outdate int) error {
+	if _, ok := l.task.Load(tableName); ok {
+		return errors.New("已经在执行了")
 	}
 	policy := (l.getPolicy(tableName)).(*model.Policy)
 	primaryFields := strings.Split(policy.PrimaryFields, ",")
 	senseFields := strings.Split(policy.Fields, ",")
 
 	if len(senseFields) == 0 || senseFields[0] == "" {
-		return // 未设置监听字段
+		return errors.New("未设置监听字段") // 未设置监听字段
 	}
 
-	l.task[tableName] = true
-	fn := func() error {
-		// 执行读取表的逻辑 每次读200行
-		data, err := model.LogTableRepo.ReadAndDeleteByID(l.sourceDb.DB, l.logTableName, tableName, 200)
-		if err != nil {
-			delete(l.task, tableName)
-			return err
-		}
-
-		datar, err := l.Dump(data, primaryFields, fields...)
-		if err != nil {
-			delete(l.task, tableName)
-			return err
-		}
-
-		if err = model.LogLocalLogRepo.Write(tableName, datar, fields, outdate); err != nil {
-			delete(l.task, tableName)
-			return err
-		}
-
-		return nil
+	l.task.Store(tableName, true)
+	defer func() {
+		l.task.Delete(tableName)
+	}()
+	// 执行读取表的逻辑 每次读200行
+	data, err := model.LogTableRepo.ReadAndDeleteByID(tableName, 200)
+	if err != nil {
+		return err
 	}
 
-	go datautil.NewMyTick(time.Duration(10)*time.Minute, fn).Start()
+	datar, err := l.Dump(data, primaryFields, fields...)
+	if err != nil {
+		return err
+	}
+
+	if err = model.LogLocalLogRepo.Write(tableName, datar, fields, outdate); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (l DefaultLogger) GetLogger(tableName string, fields []string, startTime, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	return model.LogLocalLogRepo.SearchRecordByField(tableName, fields, startTime, endTime, page, pageSize)
 }
+
+// 将run拆分
+func (l DefaultLogger) Load() func(tableName string, id, num int) ([]*model.LogTable, error) {
+	return nil
+}                                                                                       // 从源数据读取
+func (l DefaultLogger) Store() func(policy *model.Policy, data []*model.LogTable) error { return nil } // 写入到日志库中
