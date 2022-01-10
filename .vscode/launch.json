@@ -5,11 +5,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "postgrestest",
+            "name": "main app",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/cmd/postgrestest/main.go"
+            "program": "${workspaceFolder}/cmd/main/main.go"
         },
         {
             "name": "leveldb",

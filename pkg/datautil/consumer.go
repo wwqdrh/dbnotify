@@ -78,7 +78,10 @@ func (t *task) SetResult(result bool) {
 		t.done = true
 		t.Ack <- true
 	} else {
-		t.q.Push(t) // 重新加入到任务队列中
-		t.Ack <- false
+		t.q.Push(t.PayLoad) // 重新加入到任务队列中
+		t.q.r.Lock()
+		defer t.q.r.Unlock()
+		t.q.data = append(t.q.data, t)
+		// t.Ack <- false 继续等待
 	}
 }

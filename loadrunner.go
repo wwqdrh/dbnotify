@@ -1,12 +1,13 @@
 package datamanager
 
 import (
+	"time"
+
 	"datamanager/base"
 	"datamanager/common"
-	"datamanager/core/manager"
-	"datamanager/core/manager/model"
+	"datamanager/manager"
+	"datamanager/manager/model"
 	"datamanager/pkg/datautil"
-	"time"
 )
 
 const (
@@ -16,7 +17,7 @@ const (
 type LogLoadRunner struct {
 	base.Runner
 	queue *datautil.Queue
-	fn    func(tableName string, id, num int) ([]*model.LogTable, error)
+	fn    func(tableName string, id uint64, num int) ([]*model.LogTable, error)
 }
 
 func NewLogLoadRunner(queue *datautil.Queue) *LogLoadRunner {
@@ -28,18 +29,25 @@ func NewLogLoadRunner(queue *datautil.Queue) *LogLoadRunner {
 
 // 每隔一段时间读取n条数据加入到任务队列中
 func (r *LogLoadRunner) Run() {
-	id := 0
+	var id uint64
 
 	for {
+		if !initDB {
+			r.Sleep(1 * time.Second)
+			continue
+		}
 		manager.GetAllPolicy().Range(func(key, value interface{}) bool {
 			tableName := key.(string)
 			policy := value.(*model.Policy)
 			res, err := r.fn(tableName, id, nums)
-
 			if err != nil {
 				r.Warn("获取数据失败", err.Error())
 				return true
 			}
+			if len(res) == 0 {
+				return true
+			}
+
 			if !<-r.queue.Push(map[string]interface{}{
 				"data":   res,
 				"policy": policy,
@@ -56,7 +64,6 @@ func (r *LogLoadRunner) Run() {
 			}
 			return true
 		})
-
 		r.Sleep(time.Minute * 10)
 	}
 }

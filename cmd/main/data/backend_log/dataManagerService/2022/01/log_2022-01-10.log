@@ -1,0 +1,10 @@
+2022/01/10 21:02:10 /Users/dengronghui/Documents/Apps/public/datamanager/loadrunner.go:44: [3_dataManagerService_LogLoadRunner-0:W]获取数据失败 未设置监听字段 
+2022/01/10 21:28:55 /Users/dengronghui/Documents/Apps/public/datamanager/storerunner.go:46: [19_dataManagerService_LogStoreRunner-1:W]消费者执行错误 mkdir /var/log/datamanager: permission denied 
+2022/01/10 21:28:55 /Users/dengronghui/Documents/Apps/public/datamanager/storerunner.go:42: [1_main:T]  Runner: dataManagerService_LogStoreRunner-2exit by interface conversion: interface {} is *datautil.task, not map[string]interface {}
+2022/01/10 21:35:41 /Users/dengronghui/Documents/Apps/public/datamanager/storerunner.go:46: [10_dataManagerService_LogStoreRunner-5:W]消费者执行错误 mkdir /var/log/datamanager: permission denied 
+2022/01/10 21:36:36 /Users/dengronghui/Documents/Apps/public/datamanager/storerunner.go:46: [15_dataManagerService_LogStoreRunner-10:W]消费者执行错误 mkdir /var/log/datamanager: permission denied 
+2022/01/10 21:36:36 /Users/dengronghui/Documents/Apps/public/datamanager/storerunner.go:46: [13_dataManagerService_LogStoreRunner-8:W]消费者执行错误 mkdir /var/log/datamanager: permission denied 
+2022/01/10 21:36:41 /Users/dengronghui/Documents/Apps/public/datamanager/storerunner.go:46: [8_dataManagerService_LogStoreRunner-3:W]消费者执行错误 mkdir /var/log/datamanager: permission denied 
+2022/01/10 21:36:41 /Users/dengronghui/Documents/Apps/public/datamanager/storerunner.go:46: [12_dataManagerService_LogStoreRunner-7:W]消费者执行错误 mkdir /var/log/datamanager: permission denied 
+2022/01/10 21:36:41 /Users/dengronghui/Documents/Apps/public/datamanager/storerunner.go:46: [7_dataManagerService_LogStoreRunner-2:W]消费者执行错误 mkdir /var/log/datamanager: permission denied 
+2022/01/10 21:36:41 /Users/dengronghui/Documents/Apps/public/datamanager/storerunner.go:46: [6_dataManagerService_LogStoreRunner-1:W]消费者执行错误 mkdir /var/log/datamanager: permission denied 

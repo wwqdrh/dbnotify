@@ -1,38 +1,34 @@
 package common
 
 import (
-	"datamanager/common/driver"
-	"datamanager/core/manager"
-	"datamanager/pkg/plugger/postgres"
-	"sync"
+	"datamanager/manager"
+	"datamanager/types"
+
+	"gorm.io/gorm"
 )
 
 var (
-	Mana        *manager.ManagerCore // 处理日志问题的核心类
-	managerOnce = sync.Once{}
+	Mana *manager.ManagerCore // 处理日志问题的核心类
 )
 
-func InitApp(targetDB *postgres.PostgresConfig) (errs []error) {
+func InitApp(targetDB *gorm.DB, logPath string, handler types.IStructHandler, tables ...interface{}) (errs []error) {
 	// 初始化连接器
-	errs = driver.InitDriver(targetDB)
+	errs = InitDriver(targetDB, logPath)
 	if len(errs) > 0 {
 		return
 	}
-
 	// manager初始化
-	managerOnce.Do(func() {
-		conf := (&manager.ManagerConf{
-			TargetDB:  driver.PostgresDriver,
-			VersionDB: driver.SqliteDriver,
-			LogDB:     driver.LevelDBDriver,
-			OutDate:   15,
-		}).Init()
-		Mana = manager.NewManagerCore(conf)
-	})
-	Mana.AutoMigrate()
-	return
-}
+	conf := (&manager.ManagerConf{
+		TargetDB:           PostgresDriver,
+		LogDB:              LevelDBDriver,
+		OutDate:            15,
+		TableStructHandler: handler,
+	}).Init()
+	Mana = manager.NewManagerCore(conf).Init()
 
-func AddTable(table interface{}) error {
-	return Mana.Register(table, false)
+	for _, table := range tables {
+		Mana.Register(table)
+	}
+
+	return
 }
