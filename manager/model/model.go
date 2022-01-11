@@ -9,6 +9,7 @@ var (
 	VersionRepo     Version = Version{}
 	LogTableRepo    *LogTableRepository
 	LogLocalLogRepo *LocalLog
+	LogRepoV2       *LocalLog2
 )
 
 func InitRepo(logDB *plugger.LevelDBDriver, targetDB *plugger.PostgresDriver, logTableName string) {
@@ -19,5 +20,10 @@ func InitRepo(logDB *plugger.LevelDBDriver, targetDB *plugger.PostgresDriver, lo
 	LogTableRepo = &LogTableRepository{
 		db:           targetDB.DB,
 		logTableName: logTableName,
+	}
+
+	LogRepoV2 = &LocalLog2{
+		db:       logDB,
+		targetDB: targetDB,
 	}
 }

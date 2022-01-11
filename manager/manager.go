@@ -87,7 +87,11 @@ func (m *ManagerCore) Register(table interface{}) error {
 	}
 
 	if val, ok := allPolicy.Load(tableName); !ok {
-		primaryFields := strings.Join(m.TargetDB.GetPrimary(table), ",")
+		primary, err := m.TargetDB.GetPrimary(table)
+		if err != nil {
+			return err
+		}
+		primaryFields := strings.Join(primary, ",")
 		policy = &model.Policy{TableName: tableName, PrimaryFields: primaryFields, Outdate: m.OutDate}
 
 		if err := model.PolicyRepo.CreateNoExist(
@@ -169,16 +173,10 @@ func (m *ManagerCore) ListTableLog(tableName string, startTime *time.Time, endTi
 		return nil, errors.New(tableName + "未进行监听")
 	} else {
 		policy := val.(*model.Policy)
-		fields := strings.Split(policy.Fields, ",")
-		return m.LoggerPolicy.GetLogger(tableName+"_log.db", fields, startTime, endTime, page, pageSize)
+		// fields := strings.Split(policy.Fields, ",")
+		primaryFields := strings.Split(policy.PrimaryFields, ",")
+		return m.LoggerPolicy.GetLogger(tableName, primaryFields, startTime, endTime, page, pageSize)
 	}
-}
-
-func (m *ManagerCore) ListTableByFieldName(tableName string, fields []string, startTime, endTime *time.Time, page, pageSize int) (interface{}, error) {
-	if _, ok := allPolicy.Load(tableName); !ok {
-		return nil, errors.New("表未注册")
-	}
-	return m.LoggerPolicy.GetLogger(tableName+"_log.db", fields, startTime, endTime, page, pageSize)
 }
 
 func (m *ManagerCore) ModifyPolicy(tableName string, args map[string]interface{}) error {

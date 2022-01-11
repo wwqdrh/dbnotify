@@ -55,17 +55,42 @@ func (d *PostgresDriver) GetTableName(table interface{}) string {
 	if val, ok := table.(string); ok {
 		return val
 	}
-
 	stmt := &gorm.Statement{DB: d.DB}
 	stmt.Parse(table)
 	tableName := stmt.Schema.Table
 	return tableName
 }
 
-func (d *PostgresDriver) GetPrimary(table interface{}) []string {
+func (d *PostgresDriver) GetPrimary(table interface{}) ([]string, error) {
+	if val, ok := table.(string); ok {
+		return d.GetPrimaryWithName(val)
+	}
 	stmt := &gorm.Statement{DB: d.DB}
 	stmt.Parse(table)
-	return stmt.Schema.PrimaryFieldDBNames
+	return stmt.Schema.PrimaryFieldDBNames, nil
+}
+
+func (d *PostgresDriver) GetPrimaryWithName(tableName string) ([]string, error) {
+	rows, err := d.DB.Raw(`select pg_constraint.conname as pk_name,pg_attribute.attname as colname,pg_type.typname as typename from 
+	pg_constraint  inner join pg_class 
+	on pg_constraint.conrelid = pg_class.oid 
+	inner join pg_attribute on pg_attribute.attrelid = pg_class.oid 
+	and  pg_attribute.attnum = pg_constraint.conkey[1]
+	inner join pg_type on pg_type.oid = pg_attribute.atttypid
+	where pg_class.relname = ? 
+	and pg_constraint.contype='p'`, tableName).Rows()
+	if err != nil {
+		return nil, err
+	}
+
+	var pkName, colName, typeName string
+	res := []string{}
+	defer rows.Close()
+	for rows.Next() {
+		rows.Scan(&pkName, &colName, &typeName)
+		res = append(res, colName)
+	}
+	return res, nil
 }
 
 // 创建触发器是否成功

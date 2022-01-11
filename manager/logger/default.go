@@ -2,7 +2,6 @@ package logger
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -199,33 +198,18 @@ func (l DefaultLogger) Run(tableName string, fields []string, outdate, minLog in
 }
 
 // GetLogger 获取日志格式 相同主键id的需要合并到一起
-func (l DefaultLogger) GetLogger(tableName string, fields []string, startTime, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
-	res, err := model.LogLocalLogRepo.SearchRecordByField(tableName, fields, startTime, endTime, page, pageSize)
+func (l DefaultLogger) GetLogger(tableName string, primaryFields []string, startTime, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+	// res, err := model.LogLocalLogRepo.SearchRecordByField(tableName, fields, startTime, endTime, page, pageSize)
+	// res []{key.., data}
+	res, err := model.LogRepoV2.SearchRecordByField(tableName, primaryFields, startTime, endTime, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
-	// 将相同主键的id合并到一起
-	result := []map[string]interface{}{} // action field log
-	mapping := map[string][]interface{}{}
+	result := []map[string]interface{}{}
 	for _, item := range res {
-		log := (item["log"]).(map[string]interface{})
-		primary := log["primary"].(map[string]interface{}) // {id:1, name:2}
-		primaryStr := ""
-		for key, val := range primary {
-			if val2, ok := val.(map[string]interface{}); ok {
-				// before after
-				primaryStr += fmt.Sprintf("%s=%v;", key, val2["before"])
-			} else {
-				primaryStr += fmt.Sprintf("%s=%v;", key, val)
-			}
-
-		}
-		mapping[primaryStr] = append(mapping[primaryStr], item)
-	}
-	for key, item := range mapping {
 		result = append(result, map[string]interface{}{
-			"primary": key,
-			"log":     item,
+			"primary": item["key"],
+			"log":     item["data"],
 		})
 	}
 

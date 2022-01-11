@@ -144,45 +144,6 @@ func (bdl *Bdatalog) ListHistoryByName(c *hst.Context) {
 }
 
 type (
-	ListHistoryByFieldRequest struct {
-		TableName string     `json:"table_name" binding:"required"`
-		FieldName []string   `json:"field_name" binding:"required"`
-		StartTime *time.Time `form:"start_time"`
-		EndTime   *time.Time `form:"end_time"`
-		Page      int        `json:"page"`
-		PageSize  int        `json:"page_size"`
-	}
-)
-
-// {ListHistoryByFIeld}
-// @Summary
-// @Description 根据字段名获取该字段在哪些情况下发生了变化，也就是需要将日志再读出来处理一下，查看哪些是修改了的，然后以字段作为id存储在leveldb中
-// @Tags
-// @Accept multipart/form-data
-// @Produce json
-// @Success 200 {object} loginResponse "ok"
-// @Failure 400 {object} spec.Failure "we need username"
-// @Router /api/login [post]
-func (bdl *Bdatalog) ListHistoryByField(c *hst.Context) {
-	checkMethodGet(c)
-	var (
-		request ListHistoryByFieldRequest
-		err     error
-	)
-
-	if err = parseJSONBody(c.R.Body, &request); err != nil {
-		c.JSON2(http.StatusBadRequest, 1, err.Error())
-	}
-
-	logs, err := Mana.ListTableByFieldName(request.TableName, request.FieldName, request.StartTime, request.EndTime, request.Page, request.PageSize)
-	if err != nil {
-		c.JSON2(http.StatusBadRequest, 1, err.Error())
-	}
-
-	c.JSON2(http.StatusOK, 1, logs)
-}
-
-type (
 	ModifyTablePolicyRequest struct {
 		TableName    string   `json:"table_name" binding:"required"`
 		ModifyFields []string `json:"modify_fields" binding:"required"`

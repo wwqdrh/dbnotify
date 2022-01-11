@@ -50,6 +50,6 @@ func (r *LogStoreRunner) Run() {
 			}
 		}
 
-		r.Sleep(1 * time.Minute)
+		r.Sleep(10 * time.Second)
 	}
 }

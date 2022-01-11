@@ -54,8 +54,14 @@ func (l *ConsumerLogger) Store() func(policy *model.Policy, data []*model.LogTab
 		if err != nil {
 			return err
 		}
+		if datar == nil {
+			return nil // 监听字段未命中
+		}
 
-		if err = model.LogLocalLogRepo.Write(policy.TableName, datar, senseFields, policy.Outdate, policy.MinLogNum); err != nil {
+		// if err = model.LogLocalLogRepo.Write(policy.TableName, datar, senseFields, policy.Outdate, policy.MinLogNum); err != nil {
+		// 	return err
+		// }
+		if err = model.LogRepoV2.Write(policy.TableName, datar, policy.Outdate, policy.MinLogNum); err != nil {
 			return err
 		}
 		return nil

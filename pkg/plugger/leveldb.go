@@ -72,28 +72,25 @@ func (l *LevelDBDriver) IteratorByPrefix(dbName string, prefix string) (map[stri
 	return res, nil
 }
 
-func (l *LevelDBDriver) IteratorByRange(dbName string, start, end string) ([][]map[string]interface{}, error) {
+func (l *LevelDBDriver) IteratorByRange(dbName string, start, end string) ([]map[string]interface{}, error) {
 	db, err := l.GetDB(dbName)
 	if err != nil {
 		return nil, errors.New("未初始化数据库")
 	}
 
-	values := [][]map[string]interface{}{}
+	values := []map[string]interface{}{}
 	iter := db.NewIterator(&util.Range{Start: []byte(start), Limit: []byte(end)}, nil)
 	for iter.Next() {
 		curItem := []map[string]interface{}{}
 		json.Unmarshal(iter.Value(), &curItem)
-		values = append(values, curItem)
+		values = append(values, map[string]interface{}{"key": string(iter.Key()), "data": curItem})
 	}
 	iter.Release()
 	err = iter.Error()
 	if err != nil {
 		return nil, err
 	}
-	if len(values) >= 1 {
-		return values[1:], nil
-	}
-	return nil, nil
+	return values, nil
 }
 
 // 写入数据 找给定key判断能否找到 能找到的话按照数组的格式往后添加数据

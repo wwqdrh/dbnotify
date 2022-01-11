@@ -59,8 +59,7 @@ type Company struct {
 }
 
 func main() {
-	// model.InitDB("postgres", "host=office.zx-tech.net user=postgres password=postgres dbname=postgres port=5435 sslmode=disable TimeZone=Asia/Shanghai")
-	model.InitDB("postgres", "host=localhost user=postgres password=123456 dbname=postgres port=5432 sslmode=disable TimeZone=Asia/Shanghai")
+	model.InitDB("postgres", "host=office.zx-tech.net user=postgres password=postgres dbname=postgres port=5435 sslmode=disable TimeZone=Asia/Shanghai")
 
 	// 初始化datamanager db
 	datamanager.InitDB(model.DB(), ".", nil, &Company{})
