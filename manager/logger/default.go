@@ -9,6 +9,7 @@ import (
 	"datamanager/manager/model"
 	"datamanager/pkg/datautil"
 	"datamanager/pkg/plugger"
+	"datamanager/types"
 )
 
 // 日志格式转换
@@ -20,10 +21,11 @@ type (
 		targetDb     *plugger.LevelDBDriver
 		logTableName string
 		getPolicy    func(string) interface{} // 根据tableName获取配置
+		handler      types.IStructHandler
 	}
 )
 
-func NewDefaultLogger(sourceDB *plugger.PostgresDriver, targetDB *plugger.LevelDBDriver, logTableName string, getPolicy func(string) interface{}) ILogger {
+func NewDefaultLogger(sourceDB *plugger.PostgresDriver, targetDB *plugger.LevelDBDriver, logTableName string, getPolicy func(string) interface{}, handler types.IStructHandler) ILogger {
 	return &DefaultLogger{
 		sourceDb:     sourceDB,
 		targetDb:     targetDB,
@@ -31,6 +33,7 @@ func NewDefaultLogger(sourceDB *plugger.PostgresDriver, targetDB *plugger.LevelD
 		task:         &sync.Map{},
 		logTableName: logTableName,
 		getPolicy:    getPolicy,
+		handler:      handler,
 	}
 }
 
@@ -38,9 +41,8 @@ func (l *DefaultLogger) SetSenseFields(tableName string, data []string) {
 	l.senseFields[tableName] = data
 }
 
-func (l DefaultLogger) Dump(logData []*model.LogTable, primaryFields []string, fields ...string) ([]map[string]interface{}, error) {
+func (l DefaultLogger) Dump(logData []*model.LogTable, primaryFields []string) ([]map[string]interface{}, error) {
 	response := make([]map[string]interface{}, 0, len(logData))
-
 	for _, item := range logData {
 		data, _ := datautil.JsonToMap(string(item.Log))
 		log := l.wash(data, item.Action, primaryFields, l.senseFields[item.TableName]...)
@@ -186,7 +188,7 @@ func (l DefaultLogger) Run(tableName string, fields []string, outdate, minLog in
 		return err
 	}
 
-	datar, err := l.Dump(data, primaryFields, fields...)
+	datar, err := l.Dump(data, primaryFields)
 	if err != nil {
 		return err
 	}
@@ -198,6 +200,7 @@ func (l DefaultLogger) Run(tableName string, fields []string, outdate, minLog in
 }
 
 // GetLogger 获取日志格式 相同主键id的需要合并到一起
+// 需要添加通过修改字段id为name的逻辑
 func (l DefaultLogger) GetLogger(tableName string, primaryFields []string, startTime, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	// res, err := model.LogLocalLogRepo.SearchRecordByField(tableName, fields, startTime, endTime, page, pageSize)
 	// res []{key.., data}
@@ -207,13 +210,50 @@ func (l DefaultLogger) GetLogger(tableName string, primaryFields []string, start
 	}
 	result := []map[string]interface{}{}
 	for _, item := range res {
+		l.TransField(tableName, item["data"].([]map[string]interface{}))
+
 		result = append(result, map[string]interface{}{
-			"primary": item["key"],
+			"primary": l.TransPrimary(tableName, strings.Split(item["key"].(string), "@")[1]),
 			"log":     item["data"],
 		})
 	}
 
 	return result, nil
+}
+
+// TransField 转换字段
+func (l DefaultLogger) TransField(tableName string, records []map[string]interface{}) {
+	for _, item := range records {
+		log := item["log"].(map[string]interface{})
+
+		primary, primaryNew := log["primary"].(map[string]interface{}), map[string]interface{}{}
+		data, dataNew := log["data"].(map[string]interface{}), map[string]interface{}{}
+
+		for key, val := range primary {
+			primaryNew[l.handler.GetFieldName(tableName, key)] = val
+		}
+		for key, val := range data {
+			dataNew[l.handler.GetFieldName(tableName, key)] = val
+		}
+
+		item["log"] = map[string]interface{}{"primary": primaryNew, "data": dataNew}
+
+	}
+}
+
+// TransPrimary 将1=2, 字段名转换
+func (l DefaultLogger) TransPrimary(tableName string, primaryStr string) string {
+	var key, val string
+	{
+		t := strings.Split(primaryStr, "=")
+		key, val = t[0], t[1]
+	}
+	newKey := []string{}
+	for _, item := range strings.Split(key, ",") {
+		newKey = append(newKey, l.handler.GetFieldName(tableName, item))
+	}
+
+	return strings.Join(newKey, ",") + "=" + val
 }
 
 // 将run拆分

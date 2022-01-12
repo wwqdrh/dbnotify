@@ -87,3 +87,11 @@ func (*BaseStructHandler) GetFields(tableName string) []*types.Fields {
 	}
 	return res
 }
+
+func (*BaseStructHandler) GetTableName(tableID string) string {
+	return tableID + "_new"
+}
+
+func (*BaseStructHandler) GetFieldName(tableID string, fieldID string) string {
+	return fieldID + "_new"
+}

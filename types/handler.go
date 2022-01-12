@@ -14,5 +14,7 @@ type (
 	IStructHandler interface {
 		GetTables() []*Table
 		GetFields(string) []*Fields
+		GetFieldName(string, string) string // 通过表名，字段id 获取字段名
+		GetTableName(string) string         // 通过表id获取表名字
 	}
 )

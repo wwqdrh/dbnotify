@@ -50,7 +50,7 @@ func (c *ManagerConf) Init() *ManagerConf {
 		c.OutDate = 15
 	}
 	if c.LoggerPolicy == nil {
-		c.LoggerPolicy = logger.NewConsumerLogger(c.TargetDB, c.LogDB, c.LogTableName, func(s1 string) interface{} {
+		c.LoggerPolicy = logger.NewConsumerLogger(c.TargetDB, c.LogDB, c.LogTableName, c.TableStructHandler, func(s1 string) interface{} {
 			if policy, ok := allPolicy.Load(s1); !ok {
 				return nil
 			} else {
@@ -92,7 +92,8 @@ func (m *ManagerCore) Register(table interface{}) error {
 			return err
 		}
 		primaryFields := strings.Join(primary, ",")
-		policy = &model.Policy{TableName: tableName, PrimaryFields: primaryFields, Outdate: m.OutDate}
+		senseFields := strings.Join(m.TargetDB.ListTableField(tableName), ",")
+		policy = &model.Policy{TableName: tableName, PrimaryFields: primaryFields, Fields: senseFields, Outdate: m.OutDate}
 
 		if err := model.PolicyRepo.CreateNoExist(
 			m.TargetDB.DB, policy,
@@ -173,7 +174,6 @@ func (m *ManagerCore) ListTableLog(tableName string, startTime *time.Time, endTi
 		return nil, errors.New(tableName + "未进行监听")
 	} else {
 		policy := val.(*model.Policy)
-		// fields := strings.Split(policy.Fields, ",")
 		primaryFields := strings.Split(policy.PrimaryFields, ",")
 		return m.LoggerPolicy.GetLogger(tableName, primaryFields, startTime, endTime, page, pageSize)
 	}
