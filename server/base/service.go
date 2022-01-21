@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"datamanager/server/model"
+	sysModel "datamanager/server/model/system"
 
 	"github.com/ohko/logger"
 )
@@ -247,7 +247,7 @@ func (o *Service) Error(lg *logger.Logger, v ...interface{}) {
 
 // LogDB 重要日志记录到数据库中
 func (o *Service) LogDB(runner, title, key string, success bool, reason ...string) {
-	lg := &model.ServiceLog{
+	lg := &sysModel.ServiceLog{
 		Service: o.Name(),
 		Runner:  runner,
 		Title:   title,
@@ -257,7 +257,7 @@ func (o *Service) LogDB(runner, title, key string, success bool, reason ...strin
 	if len(reason) > 0 {
 		lg.Reason = reason[0]
 	}
-	model.DBServiceLog.Create(lg)
+	sysModel.DBServiceLog.Create(lg)
 }
 
 // AppendRunner ...

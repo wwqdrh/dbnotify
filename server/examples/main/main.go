@@ -47,6 +47,8 @@ func Start(h *hst.HST, middlewares ...hst.HandlerFunc) *hst.HST {
 		&common.Bdatalog{},
 	)
 
+	common.FileServer(h)
+
 	return h
 }
 
@@ -59,12 +61,10 @@ type Company struct {
 }
 
 func main() {
-	model.InitDB("postgres", "host=office.zx-tech.net user=postgres password=postgres dbname=postgres port=5435 sslmode=disable TimeZone=Asia/Shanghai")
+	model.InitDB("postgres", "host=172.18.3.9 user=postgres password=postgres dbname=postgres port=5435 sslmode=disable TimeZone=Asia/Shanghai")
 
 	// 初始化datamanager db
 	datamanager.InitDB(model.DB(), ".", nil, &Company{})
-
-	common.Mana.LogDB.IterAll("company_log.db")
 
 	h := hst.New(nil)
 	Start(h)
