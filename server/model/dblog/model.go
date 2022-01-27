@@ -1,9 +1,5 @@
 package dblog
 
-import (
-	"datamanager/server/pkg/plugger"
-)
-
 var (
 	PolicyRepo       Policy  = Policy{} // repository
 	VersionRepo      Version = Version{}
@@ -13,22 +9,14 @@ var (
 	FieldMappingRepo *fieldMappingRepo
 )
 
-func InitRepo(logDB *plugger.LevelDBDriver, targetDB *plugger.PostgresDriver, logTableName string) {
-	LogLocalLogRepo = &LocalLog{
-		db: logDB,
-	}
+func InitRepo(logTableName string) {
+	LogLocalLogRepo = &LocalLog{}
 
 	LogTableRepo = &LogTableRepository{
-		db:           targetDB.DB,
 		logTableName: logTableName,
 	}
 
-	LogRepoV2 = &LocalLog2{
-		db:       logDB,
-		targetDB: targetDB,
-	}
+	LogRepoV2 = &LocalLog2{}
 
-	FieldMappingRepo = &fieldMappingRepo{
-		db: logDB,
-	}
+	FieldMappingRepo = &fieldMappingRepo{}
 }

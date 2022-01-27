@@ -1,0 +1,6 @@
+data-log:
+  out-date: 10
+  min-log-num: 10
+  log-table-name: "policy"
+leveldb:
+  log-path: "./version"

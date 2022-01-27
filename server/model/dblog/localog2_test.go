@@ -3,30 +3,26 @@ package dblog
 import (
 	"time"
 
-	"datamanager/server/pkg/plugger"
+	"datamanager/server/common/driver"
 
-	"datamanager/server/model"
+	system_model "datamanager/server/model/system"
 )
 
 var (
-	LevelDBDriver  *plugger.LevelDBDriver
-	PostgresDriver *plugger.PostgresDriver
+	LevelDBDriver  *driver.LevelDBDriver
+	PostgresDriver *driver.PostgresDriver
 )
 
 func init() {
-	driver, err := plugger.NewLevelDBDriver(".")
+	var err error
+	LevelDBDriver, err = driver.NewLevelDBDriver(".")
 	if err != nil {
 		panic(err)
 	}
 
-	model.InitDB("postgres", "host=office.zx-tech.net user=postgres password=postgres dbname=postgres port=5435 sslmode=disable TimeZone=Asia/Shanghai")
-	LevelDBDriver = driver
-	PostgresDriver = new(plugger.PostgresDriver).InitWithDB(model.DB())
-
-	LogRepoV2 = &LocalLog2{
-		db:       LevelDBDriver,
-		targetDB: PostgresDriver,
-	}
+	system_model.InitDB("postgres", "host=office.zx-tech.net user=postgres password=postgres dbname=postgres port=5435 sslmode=disable TimeZone=Asia/Shanghai")
+	PostgresDriver = new(driver.PostgresDriver).InitWithDB(system_model.DB())
+	LogRepoV2 = &LocalLog2{}
 }
 func ExampleLocalLog2Write() {
 	now := time.Now()

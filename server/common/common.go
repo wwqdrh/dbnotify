@@ -1,32 +1,23 @@
 package common
 
 import (
-	"datamanager/server/manager"
+	"datamanager/server/service/dblog"
 	"datamanager/server/types"
-
-	"gorm.io/gorm"
 )
 
 var (
-	Mana *manager.ManagerCore // 处理日志问题的核心类
-	conf *manager.ManagerConf
+	Mana *dblog.ManagerCore // 处理日志问题的核心类
+	conf *dblog.ManagerConf
 )
 
-func InitApp(targetDB *gorm.DB, logPath string, handler types.IStructHandler, tables ...interface{}) (errs []error) {
-	// 初始化连接器
-	errs = InitDriver(targetDB, logPath)
-	if len(errs) > 0 {
-		return
-	}
+func InitApp(handler types.IStructHandler, tables ...interface{}) (errs []error) {
 	// manager初始化
-	conf = (&manager.ManagerConf{
-		TargetDB:           PostgresDriver,
-		LogDB:              LevelDBDriver,
+	conf = (&dblog.ManagerConf{
 		OutDate:            15,
 		MinLogNum:          10,
 		TableStructHandler: handler,
 	}).Init()
-	Mana = manager.NewManagerCore(conf).Init()
+	Mana = dblog.NewManagerCore(conf).Init()
 
 	for _, table := range tables {
 		Mana.Register(table, conf.MinLogNum, conf.OutDate, nil, nil)

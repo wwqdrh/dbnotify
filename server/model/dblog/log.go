@@ -3,16 +3,16 @@ package dblog
 import (
 	"time"
 
-	"datamanager/server/pkg/plugger"
+	"datamanager/server/common/driver"
 
 	"gorm.io/gorm"
 )
 
 type (
 	LogTable struct {
-		ID        uint64       `gorm:"PRIMARY_KEY"`
-		TableName string       `gorm:"table_name"`
-		Log       plugger.JSON `gorm:"TYPE:json"`
+		ID        uint64      `gorm:"PRIMARY_KEY"`
+		TableName string      `gorm:"table_name"`
+		Log       driver.JSON `gorm:"TYPE:json"`
 		Action    string
 		Time      *time.Time
 	}

@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"datamanager/server/pkg/plugger"
+	"datamanager/server/common/driver"
+	"datamanager/server/global"
 )
 
 ////////////////////
@@ -18,7 +19,6 @@ type (
 	}
 
 	fieldMappingRepo struct {
-		db *plugger.LevelDBDriver
 	}
 )
 
@@ -43,7 +43,7 @@ func (m FieldMapping) GetValue(fieldName string, flag bool) string {
 }
 
 // ListAll 获取leveldb中的映射关系
-func (m FieldMapping) ListAll(db *plugger.LevelDBDriver, tableName string) ([]*FieldMapping, error) {
+func (m FieldMapping) ListAll(db *driver.LevelDBDriver, tableName string) ([]*FieldMapping, error) {
 	var start, end string
 	{
 		t := m.GetRangeKey()
@@ -64,13 +64,13 @@ func (m FieldMapping) ListAll(db *plugger.LevelDBDriver, tableName string) ([]*F
 	return result, nil
 }
 
-func (m FieldMapping) Write(db *plugger.LevelDBDriver, tableName string) error {
+func (m FieldMapping) Write(db *driver.LevelDBDriver, tableName string) error {
 	return db.Put(tableName, m.GetKey(m.FieldID, true), []byte(m.GetValue(m.FieldName, true)))
 }
 
 func (r fieldMappingRepo) ListAllFieldMapping(tableName string) map[string]string {
 	f := new(FieldMapping)
-	val, err := f.ListAll(r.db, tableName)
+	val, err := f.ListAll(global.G_LOGDB, tableName)
 	res := map[string]string{}
 	if err != nil {
 		return res
@@ -84,7 +84,7 @@ func (r fieldMappingRepo) ListAllFieldMapping(tableName string) map[string]strin
 func (r fieldMappingRepo) UpdateAllFieldByMapping(tableName string, records map[string]string) error {
 	for key, val := range records {
 		cur := &FieldMapping{FieldID: key, FieldName: val}
-		if err := cur.Write(r.db, tableName); err != nil {
+		if err := cur.Write(global.G_LOGDB, tableName); err != nil {
 			fmt.Println(err)
 		}
 	}
