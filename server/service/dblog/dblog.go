@@ -9,7 +9,7 @@ type ServiceGroup struct {
 	Meta   *MetaService
 }
 
-func init() {
+func InitService() {
 	ServiceGroupApp = &ServiceGroup{
 		Logger: new(loggerService).Init(global.G_CONFIG.DataLog.LogTableName, global.G_StructHandler),
 		Meta:   new(MetaService).Init(),

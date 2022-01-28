@@ -30,11 +30,14 @@ func (s *MetaService) Init() *MetaService {
 	s.allPolicy = new(sync.Map)
 	s.OutDate = 15
 	s.MinLogNum = 10
+	s.TableStructHandler = global.G_StructHandler
 	return s
 }
 
 func (s *MetaService) InitApp(handler structhandler.IStructHandler, tables ...interface{}) (errs []error) {
-	s.TableStructHandler = handler
+	if handler != nil {
+		s.TableStructHandler = handler
+	}
 
 	dblog_model.InitRepo(s.LogTableName)
 

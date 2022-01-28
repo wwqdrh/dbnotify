@@ -16,7 +16,7 @@ type backend struct{}
 
 // Start ...
 func Start(h *hst.HST, middlewares ...hst.HandlerFunc) *hst.HST {
-	datamanager.InitService()
+	datamanager.InitService(system_model.DB())
 
 	go func() {
 		ss := base.Services()
@@ -67,7 +67,7 @@ func main() {
 	h := hst.New(nil)
 	Start(h)
 	// 初始化datamanager db
-	datamanager.InitDB(system_model.DB(), ".", nil, &Company{})
+	datamanager.InitDB(nil, ".", &Company{})
 	err := h.ListenHTTP(":8080")
 	log.Println("exit:", err)
 }

@@ -45,18 +45,16 @@ type (
 )
 
 // InitService 初始化后台服务 入口函数 可以空跑 之后再初始化数据库连接
-func InitService() {
-	core.Init(core.InitConfig(), core.InitLogDB(), core.InitTaskQueue())
+func InitService(db *gorm.DB) {
+	core.Init(core.InitConfig(), core.InitDataDB(db), core.InitLogDB(), core.InitTaskQueue(), core.InitStructHandler(), core.InitService())
 	runners := append([]base.IRunner{NewLogLoadRunner(global.G_LogTaskQueue)}, newLogStoreRunner(global.G_LogTaskQueue, 10)...)
 	base.InitService(&dataManagerService{}, runners...)
 }
 
 // InitDB 初始化db 这里的表是强绑定的
 // structHandler 回调接口 提供获取表列表 表名字的回调
-func InitDB(db *gorm.DB, logPath string, structHandler structhandler.IStructHandler, tables ...interface{}) error {
-	core.Init(core.InitDataDB(db), core.InitStructHandler(structHandler))
-
-	errs := service.ServiceGroupApp.Dblog.Meta.InitApp(structHandler, tables...)
+func InitDB(structHandler structhandler.IStructHandler, tables ...interface{}) error {
+	errs := service.ServiceGroupApp.Dblog.Meta.InitApp(global.G_StructHandler, tables...)
 	if len(errs) > 0 {
 		for _, item := range errs {
 			fmt.Println(item.Error())

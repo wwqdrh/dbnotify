@@ -8,7 +8,8 @@ type ServiceGroup struct {
 	Dblog *dblog.ServiceGroup
 }
 
-func init() {
+func InitService() {
+	dblog.InitService()
 	ServiceGroupApp = &ServiceGroup{
 		Dblog: dblog.ServiceGroupApp,
 	}
