@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	sysModel "datamanager/server/model/system"
+	sysModel "datamanager/server/examples/main/system"
 
 	"github.com/ohko/logger"
 )

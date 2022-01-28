@@ -4,10 +4,11 @@ import (
 	datamanager "datamanager/server"
 	"log"
 
-	"datamanager/server/base"
-	system_model "datamanager/server/model/system"
+	system_model "datamanager/server/examples/main/system"
 	"datamanager/server/router"
 	"time"
+
+	"datamanager/server/examples/main/base"
 
 	"github.com/ohko/hst"
 )
@@ -16,7 +17,8 @@ type backend struct{}
 
 // Start ...
 func Start(h *hst.HST, middlewares ...hst.HandlerFunc) *hst.HST {
-	datamanager.InitService(system_model.DB())
+	// datamanager.InitService(system_model.DB())
+	datamanager.SetCustom()
 
 	go func() {
 		ss := base.Services()
@@ -67,7 +69,8 @@ func main() {
 	h := hst.New(nil)
 	Start(h)
 	// 初始化datamanager db
-	datamanager.InitDB(nil, &Company{})
+	// datamanager.InitDB(nil, &Company{})
+	datamanager.Register(system_model.DB(), nil, &Company{})
 	err := h.ListenHTTP(":8080")
 	log.Println("exit:", err)
 }

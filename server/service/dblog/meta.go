@@ -13,32 +13,26 @@ import (
 )
 
 type MetaService struct {
-	OutDate            int    // 过期时间 单位天
-	MinLogNum          int    // 最少保留条数
-	LogTableName       string // 日志临时表的名字
-	TableStructHandler structhandler.IStructHandler
-	allPolicy          *sync.Map
+	OutDate      int    // 过期时间 单位天
+	MinLogNum    int    // 最少保留条数
+	LogTableName string // 日志临时表的名字
+	allPolicy    *sync.Map
 }
 
 func (s *MetaService) Init() *MetaService {
 	if s.LogTableName == "" {
-		s.LogTableName = "action_record_log"
+		s.LogTableName = global.G_CONFIG.DataLog.LogTableName
 	}
 	if s.OutDate <= 0 {
 		s.OutDate = 15
 	}
 	s.allPolicy = new(sync.Map)
-	s.OutDate = 15
-	s.MinLogNum = 10
-	s.TableStructHandler = global.G_StructHandler
+	s.OutDate = global.G_CONFIG.DataLog.OutDate
+	s.MinLogNum = global.G_CONFIG.DataLog.MinLogNum
 	return s
 }
 
-func (s *MetaService) InitApp(handler structhandler.IStructHandler, tables ...interface{}) (errs []error) {
-	if handler != nil {
-		s.TableStructHandler = handler
-	}
-
+func (s *MetaService) InitApp(tables ...interface{}) (errs []error) {
 	dblog_model.InitRepo(s.LogTableName)
 
 	// 表策略
@@ -220,7 +214,10 @@ func (s *MetaService) ListTable2() []*structhandler.Table {
 }
 
 func (s *MetaService) ListTableField(tableName string) []*structhandler.Fields {
-	return s.TableStructHandler.GetFields(tableName)
+	if global.G_StructHandler == nil {
+		return nil
+	}
+	return global.G_StructHandler.GetFields(tableName)
 }
 
 func (s *MetaService) ListTableAllLog(tableName string, startTime *time.Time, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
