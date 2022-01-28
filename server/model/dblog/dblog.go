@@ -1,5 +1,7 @@
 package dblog
 
+import "datamanager/server/global"
+
 var (
 	PolicyRepo       Policy  = Policy{} // repository
 	VersionRepo      Version = Version{}
@@ -14,6 +16,7 @@ func InitRepo(logTableName string) {
 
 	LogTableRepo = &LogTableRepository{
 		logTableName: logTableName,
+		db:           global.G_DATADB.DB,
 	}
 
 	LogRepoV2 = &LocalLog2{}

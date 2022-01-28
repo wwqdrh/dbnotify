@@ -3,6 +3,7 @@ package global
 import (
 	"datamanager/server/common/datautil"
 	"datamanager/server/common/driver"
+	"datamanager/server/common/structhandler"
 	"datamanager/server/config"
 
 	"github.com/spf13/viper"
@@ -16,6 +17,7 @@ var (
 	G_DATADB *driver.PostgresDriver
 	G_LOGDB  *driver.LevelDBDriver
 
-	G_CONFIG       config.AllConfig
-	G_LogTaskQueue *datautil.Queue
+	G_CONFIG        config.AllConfig
+	G_LogTaskQueue  *datautil.Queue
+	G_StructHandler structhandler.IStructHandler
 )

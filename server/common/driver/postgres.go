@@ -6,17 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"datamanager/server/types"
-
 	"gorm.io/gorm"
-)
-
-const (
-	defaultTableSql = `select relname as "table_id", cast(obj_description(relname::regclass, 'pg_class') as varchar) as "table_name"` +
-		` from pg_class where relname in (select tablename from pg_tables where schemaname='public') order by relname asc;`
-
-	defaultFieldSql = `select a.attname as "field_id", col_description(a.attrelid,a.attnum) as "field_name"` +
-		` FROM pg_class as c, pg_attribute as a WHERE c.relname = ? and a.attrelid = c.oid and a.attnum>0 order by a.attrelid;`
 )
 
 type (
@@ -142,39 +132,5 @@ func (d *PostgresDriver) ListTrigger() map[string]bool {
 		res[triggerName] = true
 	}
 
-	return res
-}
-
-// ListTable 获取数据库中的所有表名称
-func (d *PostgresDriver) ListTable() []*types.Table {
-	var res []*types.Table
-
-	err := d.DB.Raw(defaultTableSql).Scan(&res).Error
-	if err != nil {
-		return nil
-	}
-	for _, item := range res {
-		if item.TableName == "" {
-			item.TableName = item.TableID
-		}
-	}
-
-	return res
-}
-
-// ListTableField: 获取表的字段
-func (d *PostgresDriver) ListTableField(table interface{}) []*types.Fields {
-	var res []*types.Fields
-
-	tableName := d.GetTableName(table)
-	err := d.DB.Raw(defaultFieldSql, tableName).Scan(&res).Error
-	if err != nil {
-		return nil
-	}
-	for _, item := range res {
-		if item.FieldName == "" {
-			item.FieldName = item.FieldID
-		}
-	}
 	return res
 }

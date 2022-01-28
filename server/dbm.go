@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"datamanager/server/common"
 	"datamanager/server/common/datautil"
+	"datamanager/server/common/structhandler"
 	"datamanager/server/core"
 	"datamanager/server/global"
 	dblog_model "datamanager/server/model/dblog"
-	"datamanager/server/service/dblog"
-	"datamanager/server/types"
+	"datamanager/server/service"
 
 	"datamanager/server/base"
 
@@ -21,19 +20,13 @@ import (
 const nums = 1000 // 默认获取日志条数
 
 var (
-	taskQueue *datautil.Queue
-	initDB    bool // 是否初始化了数据库
-	Handler   types.IStructHandler
+	initDB bool // 是否初始化了数据库
 )
 
 type (
 	// 后台服务
 	dataManagerService struct {
 		base.Service
-	}
-
-	// 动态字段名转换
-	BaseStructHandler struct {
 	}
 
 	// 日志的生产者
@@ -54,68 +47,29 @@ type (
 // InitService 初始化后台服务 入口函数 可以空跑 之后再初始化数据库连接
 func InitService() {
 	core.Init(core.InitConfig(), core.InitLogDB(), core.InitTaskQueue())
+	runners := append([]base.IRunner{NewLogLoadRunner(global.G_LogTaskQueue)}, newLogStoreRunner(global.G_LogTaskQueue, 10)...)
+	base.InitService(&dataManagerService{}, runners...)
 }
 
 // InitDB 初始化db 这里的表是强绑定的
 // structHandler 回调接口 提供获取表列表 表名字的回调
-func InitDB(db *gorm.DB, logPath string, structHandler types.IStructHandler, tables ...interface{}) error {
-	core.Init(core.InitDataDB(db))
-	if structHandler == nil {
-		structHandler = new(BaseStructHandler)
-	}
-	errs := common.InitApp(structHandler, tables...)
+func InitDB(db *gorm.DB, logPath string, structHandler structhandler.IStructHandler, tables ...interface{}) error {
+	core.Init(core.InitDataDB(db), core.InitStructHandler(structHandler))
+
+	errs := service.ServiceGroupApp.Dblog.Meta.InitApp(structHandler, tables...)
 	if len(errs) > 0 {
 		for _, item := range errs {
 			fmt.Println(item.Error())
 		}
 		return errors.New("初始化失败")
 	}
-	runners := append([]base.IRunner{NewLogLoadRunner(global.G_LogTaskQueue)}, newLogStoreRunner(taskQueue, 10)...)
-	base.InitService(&dataManagerService{}, runners...)
 
 	initDB = true
 	return nil
 }
 
 func AddTable(table interface{}, fields []string, ignore []string) {
-	common.AddTable(table, fields, ignore)
-}
-
-// 默认的动态字段转换器
-
-func (*BaseStructHandler) GetTables() []*types.Table {
-	if global.G_DATADB == nil {
-		return nil
-	}
-	tables := global.G_DATADB.ListTable()
-	for _, item := range tables {
-		if item.TableName == "" {
-			item.TableName = item.TableID
-		}
-	}
-	return tables
-}
-
-func (*BaseStructHandler) GetFields(tableName string) []*types.Fields {
-	if global.G_DATADB == nil {
-		return nil
-	}
-
-	fields := global.G_DATADB.ListTableField(tableName)
-	for _, field := range fields {
-		if field.FieldName == "" {
-			field.FieldName = field.FieldID
-		}
-	}
-	return fields
-}
-
-func (*BaseStructHandler) GetTableName(tableID string) string {
-	return tableID
-}
-
-func (*BaseStructHandler) GetFieldName(tableID string, fieldID string) string {
-	return fieldID
+	service.ServiceGroupApp.Dblog.Meta.AddTable(table, fields, ignore)
 }
 
 // 生产者
@@ -123,7 +77,7 @@ func (*BaseStructHandler) GetFieldName(tableID string, fieldID string) string {
 func NewLogLoadRunner(queue *datautil.Queue) *LogLoadRunner {
 	return &LogLoadRunner{
 		queue: queue,
-		fn:    common.Mana.LoggerPolicy.Load(),
+		fn:    service.ServiceGroupApp.Dblog.Logger.Load(),
 	}
 }
 
@@ -136,7 +90,7 @@ func (r *LogLoadRunner) Run() {
 			r.Sleep(1 * time.Second)
 			continue
 		}
-		dblog.GetAllPolicy().Range(func(key, value interface{}) bool {
+		service.ServiceGroupApp.Dblog.Meta.GetAllPolicy().Range(func(key, value interface{}) bool {
 			tableName := key.(string)
 			policy := value.(*dblog_model.Policy)
 			res, err := r.fn(tableName, id, nums)
@@ -176,7 +130,7 @@ func newLogStoreRunner(queue *datautil.Queue, num int) []base.IRunner {
 	for i := 0; i < num; i++ {
 		rs[i] = &LogStoreRunner{
 			queue: queue,
-			fn:    common.Mana.LoggerPolicy.Store(),
+			fn:    service.ServiceGroupApp.Dblog.Logger.Store(),
 		}
 	}
 

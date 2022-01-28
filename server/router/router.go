@@ -3,6 +3,7 @@ package router
 // 就不先写router 然后 api了 这里简化直接用hst比较好接入
 
 import (
+	"datamanager/server/service"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -10,11 +11,9 @@ import (
 
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/ohko/hst"
-
-	"datamanager/server/common"
 )
 
-var Mana = common.Mana
+var dblogService = service.ServiceGroupApp.Dblog
 
 // 校验请求是否为POST
 func checkMethodPost(ctx *hst.Context) {
@@ -90,7 +89,7 @@ type (
 func (bdl *Bdatalog) ListTable(c *hst.Context) {
 	checkMethodGet(c)
 
-	c.JSON2(http.StatusOK, 0, Mana.ListTable2())
+	c.JSON2(http.StatusOK, 0, dblogService.Meta.ListTable2())
 }
 
 func (bdl *Bdatalog) RegisterTable(c *hst.Context) {
@@ -111,7 +110,7 @@ func (bdl *Bdatalog) RegisterTable(c *hst.Context) {
 		c.JSON2(http.StatusOK, -1, "table_name不能为空")
 	}
 
-	if err = Mana.Register(request.TableName, request.MinLogNum, request.Outdate, request.SenseFields, nil); err != nil {
+	if err = dblogService.Meta.Register(request.TableName, request.MinLogNum, request.Outdate, request.SenseFields, nil); err != nil {
 		c.JSON2(http.StatusOK, 1, err.Error())
 	} else {
 		c.JSON2(http.StatusOK, 0, "注册成功")
@@ -133,7 +132,7 @@ func (bdl *Bdatalog) UnregisterTable(c *hst.Context) {
 	if request.TableName == "" {
 		c.JSON2(http.StatusOK, -1, "table_name不能为空")
 	}
-	if err = Mana.UnRegister(request.TableName); err != nil {
+	if err = dblogService.Meta.UnRegister(request.TableName); err != nil {
 		c.JSON2(http.StatusOK, 1, err.Error())
 	} else {
 		c.JSON2(http.StatusOK, 0, "取消监听成功")
@@ -162,7 +161,7 @@ func (bdl *Bdatalog) ListTableField(c *hst.Context) {
 		c.JSON2(http.StatusOK, 1, err.Error())
 	}
 
-	c.JSON2(http.StatusOK, 0, Mana.ListTableField(request.TableName))
+	c.JSON2(http.StatusOK, 0, dblogService.Meta.ListTableField(request.TableName))
 }
 
 type (
@@ -212,7 +211,7 @@ func (bdl *Bdatalog) ListHistoryByName(c *hst.Context) {
 		t := time.Unix(request.EndTime/1000, 0)
 		end = &t
 	}
-	logs, err := Mana.ListTableLog(request.TableName, request.RecordID, start, end, request.Page, request.PageSize)
+	logs, err := dblogService.Meta.ListTableLog(request.TableName, request.RecordID, start, end, request.Page, request.PageSize)
 	if err != nil {
 		c.JSON2(http.StatusBadRequest, 1, err.Error())
 	}
@@ -254,7 +253,7 @@ func (bdl *Bdatalog) ListHistoryAll(c *hst.Context) {
 		end = &t
 	}
 
-	logs, err := Mana.ListTableAllLog(request.TableName, start, end, request.Page, request.PageSize)
+	logs, err := dblogService.Meta.ListTableAllLog(request.TableName, start, end, request.Page, request.PageSize)
 	if err != nil {
 		c.JSON2(http.StatusBadRequest, 1, err.Error())
 	}
@@ -289,7 +288,7 @@ func (bdl *Bdatalog) ModifyTablePolicy(c *hst.Context) {
 		c.JSON2(http.StatusBadRequest, 1, err.Error())
 	}
 
-	if err := Mana.ModifyPolicy(request.TableName, map[string]interface{}{
+	if err := dblogService.Meta.ModifyPolicy(request.TableName, map[string]interface{}{
 		"fields":      request.Fields,
 		"out_date":    request.Outdate,
 		"min_log_num": request.MinLogNum,
