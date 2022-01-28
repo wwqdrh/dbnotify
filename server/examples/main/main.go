@@ -67,7 +67,7 @@ func main() {
 	h := hst.New(nil)
 	Start(h)
 	// 初始化datamanager db
-	datamanager.InitDB(nil, ".", &Company{})
+	datamanager.InitDB(nil, &Company{})
 	err := h.ListenHTTP(":8080")
 	log.Println("exit:", err)
 }

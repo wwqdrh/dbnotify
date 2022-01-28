@@ -17,8 +17,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const nums = 1000 // 默认获取日志条数
-
 var (
 	initDB bool // 是否初始化了数据库
 )
@@ -91,7 +89,7 @@ func (r *LogLoadRunner) Run() {
 		service.ServiceGroupApp.Dblog.Meta.GetAllPolicy().Range(func(key, value interface{}) bool {
 			tableName := key.(string)
 			policy := value.(*dblog_model.Policy)
-			res, err := r.fn(tableName, id, nums)
+			res, err := r.fn(tableName, id, global.G_CONFIG.DataLog.PerReadNum)
 			if err != nil {
 				r.Warn("获取数据失败", err.Error())
 				return true
