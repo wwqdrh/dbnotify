@@ -8,6 +8,7 @@ import (
 	"time"
 
 	system_model "github.com/wwqdrh/datamanager/examples/main/system"
+	"github.com/wwqdrh/datamanager/model/dblog/request"
 	"github.com/wwqdrh/datamanager/router"
 
 	"github.com/wwqdrh/datamanager/examples/main/base"
@@ -20,7 +21,7 @@ type backend struct{}
 // Start ...
 func Start(h *hst.HST, middlewares ...hst.HandlerFunc) *hst.HST {
 	// datamanager.InitService(system_model.DB())
-	datamanager.SetCustom()
+	// datamanager.SetCustom()
 
 	go func() {
 		ss := base.Services()
@@ -64,15 +65,30 @@ type Company struct {
 	Salary  int
 }
 
+type CompanyRela struct {
+	ID        int `gorm:"PRIMARY_KEY;AUTO_INCREMENT"`
+	CompanyID int
+	Salary    int
+}
+
 func main() {
-	// system_model.InitDB("postgres", "host=172.18.3.9 user=postgres password=postgres dbname=postgres port=5435 sslmode=disable TimeZone=Asia/Shanghai")
-	system_model.InitDB("postgres", "host=localhost user=postgres password=123456 dbname=postgres port=5432 sslmode=disable TimeZone=Asia/Shanghai")
+	system_model.InitDB("postgres", "host=172.18.3.9 user=postgres password=postgres dbname=hui_test port=5435 sslmode=disable TimeZone=Asia/Shanghai")
+	// system_model.InitDB("postgres", "host=localhost user=postgres password=123456 dbname=postgres port=5432 sslmode=disable TimeZone=Asia/Shanghai")
 
 	h := hst.New(nil)
 	Start(h)
 	// 初始化datamanager db
 	// datamanager.InitDB(nil, &Company{})
-	datamanager.Register(system_model.DB(), nil, &Company{})
+	datamanager.Register(system_model.DB(), nil,
+		&request.TablePolicy{
+			Table:     Company{},
+			RelaField: "id",
+			Relations: "company_rela.company_id",
+		}, &request.TablePolicy{
+			Table:     &CompanyRela{},
+			RelaField: "company_id",
+			Relations: "company.id",
+		})
 	err := h.ListenHTTP(":8080")
 	log.Println("exit:", err)
 }

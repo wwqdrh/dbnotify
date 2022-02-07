@@ -3,13 +3,15 @@ package dblog
 import (
 	"errors"
 	"fmt"
-	"github.com/wwqdrh/datamanager/common/structhandler"
-	"github.com/wwqdrh/datamanager/global"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/wwqdrh/datamanager/common/structhandler"
+	"github.com/wwqdrh/datamanager/global"
+
 	dblog_model "github.com/wwqdrh/datamanager/model/dblog"
+	"github.com/wwqdrh/datamanager/model/dblog/request"
 )
 
 type MetaService struct {
@@ -32,6 +34,7 @@ func (s *MetaService) Init() *MetaService {
 	return s
 }
 
+// InitApp 读取表的策略
 func (s *MetaService) InitApp(tables ...interface{}) (errs []error) {
 	dblog_model.InitRepo(s.LogTableName)
 
@@ -45,14 +48,20 @@ func (s *MetaService) InitApp(tables ...interface{}) (errs []error) {
 	global.G_DATADB.DB.Table(s.LogTableName).AutoMigrate(&dblog_model.LogTable{})
 
 	for _, table := range tables {
-		s.Register(table, s.MinLogNum, s.OutDate, nil, nil)
+		// s.Register(table, s.MinLogNum, s.OutDate, nil, nil)
+		s.RegisterWithPolicy(table.(*request.TablePolicy))
 	}
 
 	return
 }
 
+// AddTable 添加动态变
 func (s *MetaService) AddTable(table interface{}, senseFields []string, ignoreFields []string) {
-	s.Register(table, s.MinLogNum, s.OutDate, senseFields, ignoreFields)
+	s.RegisterWithPolicy(&request.TablePolicy{
+		Table:        table,
+		SenseFields:  senseFields,
+		IgnoreFields: ignoreFields,
+	})
 }
 
 func (s *MetaService) GetAllPolicy() *sync.Map {
@@ -60,8 +69,40 @@ func (s *MetaService) GetAllPolicy() *sync.Map {
 }
 
 func (s *MetaService) Register(table interface{}, min_log_num, outdate int, fields []string, ignoreFields []string) error {
-	s.registerCheck(table) // 检查table是否合法
+	return s.RegisterWithPolicy(&request.TablePolicy{
+		Table:        table,
+		SenseFields:  fields,
+		IgnoreFields: ignoreFields,
+	})
+}
 
+func (s *MetaService) RegisterWithPolicy(pol *request.TablePolicy) error {
+	table := pol.Table
+	if !s.registerCheck(table) { // 检查table是否合法
+		return fmt.Errorf("%v不合法", table)
+	}
+
+	tableName := global.G_DATADB.GetTableName(table)
+	if tableName == "" {
+		return errors.New("表名不能为空")
+	}
+
+	if _, ok := s.allPolicy.Load(tableName); !ok {
+		if p, err := s.buildPolicy(tableName, s.MinLogNum, s.OutDate, pol); err != nil {
+			return err
+		} else {
+			ServiceGroupApp.Logger.SetSenseFields(tableName, strings.Split(p.Fields, ","))
+		}
+
+		if err := s.buildTrigger(tableName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// buildPolicy 为新表注册策略
+func (s *MetaService) buildPolicy(tableName string, min_log_num, outdate int, pol *request.TablePolicy) (*dblog_model.Policy, error) {
 	// 最少记录条数
 	if min_log_num < s.MinLogNum {
 		min_log_num = s.MinLogNum
@@ -69,57 +110,55 @@ func (s *MetaService) Register(table interface{}, min_log_num, outdate int, fiel
 	if outdate < s.OutDate {
 		outdate = s.OutDate
 	}
-
-	var (
-		policy *dblog_model.Policy
-	)
-	tableName := global.G_DATADB.GetTableName(table)
-	if tableName == "" {
-		return errors.New("表名不能为空")
+	primary, err := global.G_DATADB.GetPrimary(tableName)
+	if err != nil {
+		return nil, err
 	}
-
-	if val, ok := s.allPolicy.Load(tableName); !ok {
-		primary, err := global.G_DATADB.GetPrimary(table)
-		if err != nil {
-			return err
-		}
-		primaryFields := strings.Join(primary, ",")
-		fieldsStr := []string{}
-		allFields := global.G_StructHandler.GetFields(tableName)
-		ignoreMapping := map[string]bool{}
-		for _, item := range ignoreFields {
-			ignoreMapping[item] = true
-		}
-		if len(fields) == 0 || fields[0] == "" {
-			for _, item := range allFields {
-				if _, ok := ignoreMapping[item.FieldID]; !ok {
-					fieldsStr = append(fieldsStr, item.FieldID)
-				}
-			}
-		} else {
-			for _, item := range fields {
-				if _, ok := ignoreMapping[item]; !ok {
-					fieldsStr = append(fieldsStr, item)
-				}
+	primaryFields := strings.Join(primary, ",")
+	fieldsStr := []string{}
+	allFields := global.G_StructHandler.GetFields(tableName)
+	ignoreMapping := map[string]bool{}
+	for _, item := range pol.IgnoreFields {
+		ignoreMapping[item] = true
+	}
+	if len(pol.SenseFields) == 0 || pol.SenseFields[0] == "" {
+		for _, item := range allFields {
+			if _, ok := ignoreMapping[item.FieldID]; !ok {
+				fieldsStr = append(fieldsStr, item.FieldID)
 			}
 		}
-		policy = &dblog_model.Policy{TableName: tableName, PrimaryFields: primaryFields, Fields: strings.Join(fieldsStr, ","), MinLogNum: min_log_num, Outdate: outdate}
-
-		if err := dblog_model.PolicyRepo.CreateNoExist(
-			global.G_DATADB.DB, policy,
-			map[string]interface{}{"table_name": tableName},
-		); err != nil {
-			return err
-		}
-		s.allPolicy.Store(tableName, policy)
 	} else {
-		policy = val.(*dblog_model.Policy)
+		for _, item := range pol.SenseFields {
+			if _, ok := ignoreMapping[item]; !ok {
+				fieldsStr = append(fieldsStr, item)
+			}
+		}
+	}
+	policy := &dblog_model.Policy{
+		TableName:     tableName,
+		PrimaryFields: primaryFields,
+		Fields:        strings.Join(fieldsStr, ","),
+		MinLogNum:     min_log_num,
+		Outdate:       outdate,
+		RelaField:     pol.RelaField,
+		Relations:     pol.Relations,
 	}
 
+	if err := dblog_model.PolicyRepo.CreateNoExist(
+		global.G_DATADB.DB, policy,
+		map[string]interface{}{"table_name": tableName},
+	); err != nil {
+		return nil, err
+	}
+	s.allPolicy.Store(tableName, policy)
+	return policy, nil
+}
+
+func (s *MetaService) buildTrigger(tableName string) error {
 	funcName := tableName + "_auto_log_recored()"
 	triggerName := tableName + "_auto_log_trigger"
 
-	global.G_DATADB.CreateTrigger(fmt.Sprintf(`
+	return global.G_DATADB.CreateTrigger(fmt.Sprintf(`
 		create or replace FUNCTION %s RETURNS trigger
 		LANGUAGE plpgsql
 	    AS $$
@@ -152,8 +191,7 @@ func (s *MetaService) Register(table interface{}, min_log_num, outdate int, fiel
 		s.LogTableName, tableName,
 		triggerName, tableName, funcName), triggerName,
 	)
-	ServiceGroupApp.Logger.SetSenseFields(tableName, strings.Split(policy.Fields, ","))
-	return nil
+
 }
 
 func (s *MetaService) registerCheck(table interface{}) bool {

@@ -22,6 +22,24 @@ type (
 	}
 )
 
+func pagination(records []map[string]interface{}, page, pageSize int) []map[string]interface{} {
+	if page <= 0 {
+		page = 1
+	}
+	switch {
+	case pageSize > 100:
+		pageSize = 100
+	case pageSize <= 0:
+		pageSize = 10
+	}
+	offset := (page - 1) * pageSize
+	maxItem := offset + pageSize
+	if maxItem > len(records) {
+		maxItem = len(records)
+	}
+	return records[offset:maxItem]
+}
+
 func (l LocalLog2) GetKeyBuilder(date, field string) string {
 	return fmt.Sprintf("%s@%s", date, field)
 }
@@ -54,7 +72,7 @@ func (l LocalLog2) Write(tableName string, data []map[string]interface{}, outdat
 	// 字段-时间戳 需要先加一个字段-0000的分界线方便删除
 	for _, item := range data {
 		logs := item["log"].(map[string]interface{})
-		datetime := datautil.ParseTime(item["time"].(*time.Time))[:10]
+		datetime := item["time"].(string)[:10]
 
 		// data := logs["data"].(map[string]interface{})
 		logPrimaryData := logs["primary"].(map[string]interface{})
@@ -162,24 +180,10 @@ func (l LocalLog2) SearchAllRecord(tableName string, primaryFields []string, sta
 		result = append(result, item)
 	}
 
-	if page == 0 {
-		page = 1
-	}
-	switch {
-	case pageSize > 100:
-		pageSize = 100
-	case pageSize <= 0:
-		pageSize = 10
-	}
-	offset := (page - 1) * pageSize
-	maxItem := offset + pageSize
-	if maxItem > len(result) {
-		maxItem = len(result)
-	}
-
-	return result[offset:maxItem], nil
+	return pagination(result, page, pageSize), nil
 }
 
+// SearchRecordByField 获取具体记录值
 func (l LocalLog2) SearchRecordByField(tableName string, primaryID string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	// primaryStr := strings.Join(primaryFields, ",") + "="
 	dbName := tableName + "_log.db" // 一般都是同一个数据表的数据
@@ -200,25 +204,53 @@ func (l LocalLog2) SearchRecordByField(tableName string, primaryID string, start
 		result = append(result, item)
 	}
 	// 将result[...]["data"]中的进行组合
+	// records := []map[string]interface{}{}
+	// for _, item := range result {
+	// 	records = append(records, item["data"].([]map[string]interface{})...)
+	// }
+
+	return pagination(result, page, pageSize), nil
+}
+
+// SearchRecordWithCondition 根据表名、字段条件进行查询
+func (l LocalLog2) SearchRecordWithCondition(tableName string, primary []string, condition map[string]string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+	dbName := tableName + "_log.db" // 一般都是同一个数据表的数据
+	startstr, endstr := l.GetTimeRange(strings.Join(primary, ",")+"=", start, end)
+	res, err := global.G_LOGDB.IteratorByRange(dbName, startstr, endstr)
+	if err != nil {
+		return nil, err
+	}
+
+	// 将0000-00-00 9999-99-99 其他的key 的去除
+	result := []map[string]interface{}{}
+	for _, item := range res {
+		if strings.Index(item["key"].(string), "0000-00-00") == 0 ||
+			strings.Index(item["key"].(string), "9999-99-99") == 0 {
+			continue
+		}
+		result = append(result, item)
+	}
+	// 将result[...]["data"]中的进行组合
 	records := []map[string]interface{}{}
 	for _, item := range result {
-		records = append(records, item["data"].([]map[string]interface{})...)
+		for _, record := range item["data"].([]map[string]interface{}) {
+			log := record["log"].(map[string]interface{})
+			all := log["all"].(map[string]interface{})
+
+			flag := true
+			for key, val := range condition {
+				if fmt.Sprint(all[key]) != val {
+					flag = false
+					break
+				}
+			}
+			if !flag {
+				continue
+			}
+
+			records = append(records, record)
+		}
 	}
 
-	if page == 0 {
-		page = 1
-	}
-	switch {
-	case pageSize > 100:
-		pageSize = 100
-	case pageSize <= 0:
-		pageSize = 10
-	}
-	offset := (page - 1) * pageSize
-	maxItem := offset + pageSize
-	if maxItem > len(result) {
-		maxItem = len(result)
-	}
-
-	return result[offset:maxItem], nil
+	return pagination(records, page, pageSize), nil
 }

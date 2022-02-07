@@ -9,6 +9,7 @@
 module.exports = {
     publicPath:"/bdlog/",
     outputDir:"../bdlog/",
+    
     devServer: {
         headers: {
             'Access-Control-Allow-Origin': '*'       

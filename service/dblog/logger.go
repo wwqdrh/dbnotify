@@ -47,13 +47,14 @@ func (s *loggerService) Dump(logData []*dblog_model.LogTable, primaryFields []st
 		cur := map[string]interface{}{
 			"log":    log,
 			"action": item.Action,
-			"time":   item.Time,
+			"time":   datautil.ParseTime(item.Time),
 		}
 		response = append(response, cur)
 	}
 	return response, nil
 }
 
+// Wash 写入日志时对数据结构的一些处理
 func (s *loggerService) wash(data map[string]interface{}, action string, primaryFields []string, fieldNames ...string) map[string]interface{} {
 	if len(fieldNames) == 0 {
 		return data
@@ -163,11 +164,12 @@ func (s *loggerService) wash(data map[string]interface{}, action string, primary
 	}
 }
 
-// SetSenseFields
+// SetSenseFields 设置监听的字段
 func (s *loggerService) SetSenseFields(tableName string, data []string) {
 	s.senseFields[tableName] = data
 }
 
+// getPolicy 根据表名获取配置项
 func (s *loggerService) getPolicy(s1 string) interface{} {
 	if policy, ok := ServiceGroupApp.Meta.allPolicy.Load(s1); !ok {
 		return nil
@@ -210,7 +212,7 @@ func (s *loggerService) Run(tableName string, fields []string, outdate, minLog i
 	return nil
 }
 
-// GetAllLogger 获取整体的记录行信息
+// GetAllLogger 获取整体的记录行信息 还需要将关联表记录加载出来
 func (s *loggerService) GetLogger(tableName string, primaryID string, startTime, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	res, err := dblog_model.LogRepoV2.SearchRecordByField(tableName, primaryID, startTime, endTime, page, pageSize)
 	if err != nil {
@@ -218,15 +220,26 @@ func (s *loggerService) GetLogger(tableName string, primaryID string, startTime,
 	}
 	result := []map[string]interface{}{}
 	for _, item := range res {
+		log := s.TransField(tableName, item["data"].([]map[string]interface{}))
+		for i, c := range log {
+			t, err := datautil.UnParseTime(c["time"].(string))
+			if err != nil {
+				continue
+			}
+
+			log[i]["relations"] = s.GetRelationLogger(tableName, primaryID, t)
+		}
+
 		result = append(result, map[string]interface{}{
 			"primary": s.TransPrimary(tableName, strings.Split(item["key"].(string), "@")[1]),
-			"log":     s.TransField(tableName, item["data"].([]map[string]interface{})),
+			"log":     log,
 		})
 	}
 
 	return result, nil
 }
 
+// GetAllLogger 从leveldb中获取记录 并根据策略表中的多表关系 查询相关联的记录并组合
 func (s *loggerService) GetAllLogger(tableName string, primaryFields []string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	res, err := dblog_model.LogRepoV2.SearchAllRecord(tableName, primaryFields, start, end, page, pageSize)
 	if err != nil {
@@ -241,6 +254,63 @@ func (s *loggerService) GetAllLogger(tableName string, primaryFields []string, s
 	}
 
 	return result, nil
+}
+
+// GetRelationLogger 获取与当前记录有关联的记录 值相同 时间戳差值不超过1分钟
+func (s *loggerService) GetRelationLogger(tableName string, curVal interface{}, stamp time.Time) interface{} {
+	// 1、获取relations
+	var policy *dblog_model.Policy
+	if val, ok := ServiceGroupApp.Meta.allPolicy.Load(tableName); !ok {
+		return errors.New("未发现当前表的策略")
+	} else {
+		policy = val.(*dblog_model.Policy)
+	}
+
+	// 2、根据relations中的表名，主键字段
+	start, end := stamp.Add(1*time.Second), stamp.Add(-1*time.Second) // 默认在左右一秒范围内的
+	records := []map[string]interface{}{}
+	for _, item := range strings.Split(policy.Relations, ";") {
+		var tName, fName string
+		{
+			t := strings.Split(item, ".")
+			tName, fName = t[0], t[1]
+		}
+		var tpolicy *dblog_model.Policy
+		if val, ok := ServiceGroupApp.Meta.allPolicy.Load(tName); !ok {
+			return errors.New("未发现当前表的策略")
+		} else {
+			tpolicy = val.(*dblog_model.Policy)
+		}
+		// cond := s.ParsePrimaryVal(curVal.(string))
+		cond := map[string]string{
+			fName: strings.Split(curVal.(string), "=")[1],
+		}
+
+		primaryFields := strings.Split(tpolicy.PrimaryFields, ",")
+		data, err := dblog_model.LogRepoV2.SearchRecordWithCondition(tName, primaryFields, cond, &start, &end, 0, 0)
+		if err != nil {
+			continue
+		}
+		records = append(records, data...)
+	}
+	return records
+}
+
+// ParsePrimaryVal id,name=1,2
+func (s *loggerService) ParsePrimaryVal(curVal string) map[string]string {
+	var keys, vals []string
+	{
+		t := strings.Split(curVal, "=")
+		keys, vals = strings.Split(t[0], ","), strings.Split(t[1], ",")
+	}
+	if len(keys) != len(vals) {
+		return nil
+	}
+	cond := map[string]string{}
+	for i := 0; i < len(keys); i++ {
+		cond[keys[i]] = vals[i]
+	}
+	return cond
 }
 
 func (s *loggerService) TransField(tableName string, records []map[string]interface{}) []map[string]interface{} {
@@ -286,10 +356,12 @@ func (s *loggerService) TransField(tableName string, records []map[string]interf
 				allNew[key] = val
 			}
 		}
-		res = append(res, map[string]interface{}{"primary": primaryNew, "data": dataNew, "all": allNew, "action": item["action"], "time": item["time"]})
+		res = append(res, map[string]interface{}{"primary": primaryNew, "data": dataNew, "all": allNew, "action": item["action"], "time": item["time"], "relations": item["relations"]})
 	}
 	return res
 }
+
+// TransPrimary tableid与name之间的映射
 func (s *loggerService) TransPrimary(tableName string, primaryStr string) string {
 	var key, val string
 	{

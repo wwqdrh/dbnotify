@@ -4,10 +4,11 @@ package router
 
 import (
 	"encoding/json"
-	"github.com/wwqdrh/datamanager/service"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/wwqdrh/datamanager/service"
 
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/ohko/hst"

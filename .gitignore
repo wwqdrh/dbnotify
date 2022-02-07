@@ -1,6 +1,7 @@
 .vscode
 version.db
 version
+DOCS.md
 
 .vscode
 __debug_bin

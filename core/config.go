@@ -16,7 +16,7 @@ const confStr = `
 data-log:
   out-date: 10
   min-log-num: 10
-  log-table-name: "policy"
+  log-table-name: "_action_log"
   per-read-num: 1000
 leveldb:
   log-path: "./version"

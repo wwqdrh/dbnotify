@@ -14,6 +14,8 @@ type Policy struct {
 	Fields        string // 需要进行触发的数据 a,b,c,d的格式
 	MinLogNum     int
 	Outdate       int // 单位天数 默认为1个月
+	RelaField     string
+	Relations     string // `gorm:"description:"[表名].[字段名];[表名].[字段名]...""`
 }
 
 // 构造表结构
