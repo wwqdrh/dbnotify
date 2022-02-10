@@ -30,28 +30,53 @@ func (s *loggerService) Init(logTableName string, handler structhandler.IStructH
 }
 
 // Dump 将log struct转换成map形式
+// 需要处理ddl的log格式以及dml数据的log格式
 func (s *loggerService) Dump(logData []*dblog_model.LogTable, primaryFields []string) ([]map[string]interface{}, error) {
 	response := make([]map[string]interface{}, 0, len(logData))
+	var val map[string]interface{}
 	for _, item := range logData {
-		data, _ := datautil.JsonToMap(string(item.Log))
-		senseFields := s.senseFields[item.TableName]
-		if len(senseFields) == 0 || senseFields[0] == "" {
-			for _, item := range global.G_StructHandler.GetFields(item.TableName) {
-				senseFields = append(senseFields, item.FieldID)
-			}
+		switch item.Action {
+		case "ddl":
+			val = s.dumpDDL(item)
+		default:
+			val = s.dumpDML(item, primaryFields)
 		}
-		log := s.wash(data, item.Action, primaryFields, senseFields...)
-		if log == nil {
-			continue
+		if val != nil {
+			response = append(response, val)
 		}
-		cur := map[string]interface{}{
-			"log":    log,
-			"action": item.Action,
-			"time":   datautil.ParseTime(item.Time),
-		}
-		response = append(response, cur)
+
 	}
 	return response, nil
+}
+
+// 处理ddl
+func (s *loggerService) dumpDDL(item *dblog_model.LogTable) map[string]interface{} {
+	data, _ := datautil.JsonToMap(string(item.Log))
+	return map[string]interface{}{
+		"log":    data["data"].([]interface{})[0].(string), // 一般只有第一个ddl语句
+		"action": item.Action,
+		"time":   datautil.ParseTime(item.Time),
+	}
+}
+
+// 处理dml
+func (s *loggerService) dumpDML(item *dblog_model.LogTable, primaryFields []string) map[string]interface{} {
+	data, _ := datautil.JsonToMap(string(item.Log))
+	senseFields := s.senseFields[item.TableName]
+	if len(senseFields) == 0 || senseFields[0] == "" {
+		for _, item := range global.G_StructHandler.GetFields(item.TableName) {
+			senseFields = append(senseFields, item.FieldID)
+		}
+	}
+	log := s.wash(data, item.Action, primaryFields, senseFields...)
+	if log == nil {
+		return nil
+	}
+	return map[string]interface{}{
+		"log":    log,
+		"action": item.Action,
+		"time":   datautil.ParseTime(item.Time),
+	}
 }
 
 // Wash 写入日志时对数据结构的一些处理
@@ -329,6 +354,18 @@ func (s *loggerService) TransField(tableName string, records []map[string]interf
 	dblog_model.FieldMappingRepo.UpdateAllFieldByMapping(tableName, fieldMappingCache)
 
 	for _, item := range records {
+		if val, ok := item["action"].(string); ok && val == "ddl" {
+			res = append(res, map[string]interface{}{
+				"primary":   nil,
+				"data":      map[string]interface{}{"sql": item["log"]},
+				"all":       nil,
+				"action":    item["action"],
+				"time":      item["time"],
+				"relations": nil},
+			)
+			continue
+		}
+
 		log := item["log"].(map[string]interface{})
 
 		primary, primaryNew := log["primary"].(map[string]interface{}), map[string]interface{}{}
@@ -356,13 +393,24 @@ func (s *loggerService) TransField(tableName string, records []map[string]interf
 				allNew[key] = val
 			}
 		}
-		res = append(res, map[string]interface{}{"primary": primaryNew, "data": dataNew, "all": allNew, "action": item["action"], "time": item["time"], "relations": item["relations"]})
+		res = append(res, map[string]interface{}{
+			"primary":   primaryNew,
+			"data":      dataNew,
+			"all":       allNew,
+			"action":    item["action"],
+			"time":      item["time"],
+			"relations": item["relations"]},
+		)
 	}
 	return res
 }
 
 // TransPrimary tableid与name之间的映射
 func (s *loggerService) TransPrimary(tableName string, primaryStr string) string {
+	if primaryStr == "type=ddl" {
+		return "type=ddl"
+	}
+
 	var key, val string
 	{
 		t := strings.Split(primaryStr, "=")
@@ -377,6 +425,8 @@ func (s *loggerService) TransPrimary(tableName string, primaryStr string) string
 }
 
 // Load 从源数据中读取日志
+// 1、读取dml日志
+// 2、读取ddl日志
 func (s *loggerService) Load() func(tableName string, id uint64, num int) ([]*dblog_model.LogTable, error) {
 	return func(tableName string, id uint64, num int) ([]*dblog_model.LogTable, error) {
 		data, err := dblog_model.LogTableRepo.ReadBytableNameAndLimit(tableName, id, num)

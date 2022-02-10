@@ -52,7 +52,7 @@ func (l LocalLog2) GetLastKeyPin(field string) string {
 	return fmt.Sprintf("9999-99-99@%s", field)
 }
 
-// Write 写到磁盘中
+// 记录dml 写到磁盘中
 func (l LocalLog2) Write(tableName string, data []map[string]interface{}, outdate, minLog int) error {
 	if len(data) == 0 {
 		return nil
@@ -71,24 +71,41 @@ func (l LocalLog2) Write(tableName string, data []map[string]interface{}, outdat
 	primaryStr := strings.Join(primaryFields, ",") + "="
 	// 字段-时间戳 需要先加一个字段-0000的分界线方便删除
 	for _, item := range data {
-		logs := item["log"].(map[string]interface{})
-		datetime := item["time"].(string)[:10]
-
-		// data := logs["data"].(map[string]interface{})
-		logPrimaryData := logs["primary"].(map[string]interface{})
-		primaryValStr := []string{} // 存储主键的值作为key
-		for _, key := range primaryFields {
-			primaryValue := logPrimaryData[key]
-			if curValue, ok := primaryValue.(map[string]interface{}); ok {
-				primaryValStr = append(primaryValStr, fmt.Sprintf("%v", curValue["before"]))
-			} else {
-				primaryValStr = append(primaryValStr, fmt.Sprintf("%v", logPrimaryData[key]))
-			}
+		switch item["action"] {
+		case "ddl":
+			l.WriteDDL(tableName, item, dbName)
+		default:
+			l.WriteDML(tableName, item, dbName, primaryFields, primaryStr, outdate, minLog)
 		}
-		l.AddLog(dbName, datetime, primaryStr+strings.Join(primaryValStr, ","), item, outdate, minLog)
+
 	}
 
 	return nil
+}
+
+func (l LocalLog2) WriteDML(tableName string, item map[string]interface{}, dbName string, primaryFields []string, primaryStr string, outdate, minLog int) error {
+	logs := item["log"].(map[string]interface{})
+	datetime := item["time"].(string)[:10]
+
+	// data := logs["data"].(map[string]interface{})
+	logPrimaryData := logs["primary"].(map[string]interface{})
+	primaryValStr := []string{} // 存储主键的值作为key
+	for _, key := range primaryFields {
+		primaryValue := logPrimaryData[key]
+		if curValue, ok := primaryValue.(map[string]interface{}); ok {
+			primaryValStr = append(primaryValStr, fmt.Sprintf("%v", curValue["before"]))
+		} else {
+			primaryValStr = append(primaryValStr, fmt.Sprintf("%v", logPrimaryData[key]))
+		}
+	}
+	return l.AddLog(dbName, datetime, primaryStr+strings.Join(primaryValStr, ","), item, outdate, minLog)
+
+}
+
+// 记录ddl 语句
+func (l LocalLog2) WriteDDL(tableName string, item map[string]interface{}, dbName string) error {
+	datetime := item["time"].(string)[:10]
+	return l.AddLog(dbName, datetime, "type=ddl", item, -1, -1)
 }
 
 // 添加一条记录 过期日期需要删除
@@ -97,7 +114,10 @@ func (l LocalLog2) AddLog(db string, date, field string, record map[string]inter
 		return err
 	}
 
-	l.removeRecord(db, date, field, outdate, minLog)
+	// 设置为-1永远不删除，比如ddl相关的
+	if outdate > 0 && minLog > 0 {
+		l.removeRecord(db, date, field, outdate, minLog)
+	}
 
 	key := l.GetKeyBuilder(date, field)
 	err := global.G_LOGDB.WriteByArray(db, key, record)

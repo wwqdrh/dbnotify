@@ -43,6 +43,12 @@
             >
           </div>
 
+          <div class="action" v-if="item.action == 'ddl'">
+            <!-- {{ item.data}} -->
+            <span style="margin-right: 10px" class="label_name">{{
+              item.data.sql
+            }}</span>
+          </div>
           <div class="action" v-if="item.action == 'update'">
             <!-- {{ item.data}} -->
             <div
@@ -87,87 +93,87 @@
               </div>
             </div>
           </div>
-          
+
           <el-card
-              class="box-card"
-              v-for="(citem, cindex) in item.relations"
-              :key="cindex"
-              style="margin-bottom: 10px"
-            >
-              <div class="time" style="margin-bottom: 10px">
-                <span style="margin-right: 10px">
-                  <span class="label_name">时间：</span
-                  >{{ getLocalTime(citem.time) }}</span
-                >
-                <span v-if="citem.action == 'update'" style="color: #e6a23c"
-                  >更新</span
-                >
-                <span v-else-if="citem.action == 'insert'" style="color: #67c23a"
-                  >创建</span
-                >
-                <span v-else-if="citem.action == 'delete'" style="color: #f56c6c"
-                  >删除</span
-                >
-              </div>
+            class="box-card"
+            v-for="(citem, cindex) in item.relations"
+            :key="cindex"
+            style="margin-bottom: 10px"
+          >
+            <div class="time" style="margin-bottom: 10px">
+              <span style="margin-right: 10px">
+                <span class="label_name">时间：</span
+                >{{ getLocalTime(citem.time) }}</span
+              >
+              <span v-if="citem.action == 'update'" style="color: #e6a23c"
+                >更新</span
+              >
+              <span v-else-if="citem.action == 'insert'" style="color: #67c23a"
+                >创建</span
+              >
+              <span v-else-if="citem.action == 'delete'" style="color: #f56c6c"
+                >删除</span
+              >
+            </div>
 
-              <div class="action" v-if="item.action == 'update'">
-                <!-- {{ item.data}} -->
-                <div
-                  v-for="(i, index) in item.data"
-                  :key="index"
-                  class="action_item"
-                >
-                  <div>
-                    <span style="margin-right: 10px" class="label_name"
-                      >{{ index }}:</span
-                    >
-                    <span style="margin-right: 20px"
-                      >更新前：{{ i.before }}
-                    </span>
-                    <span> 更新后：{{ i.after }}</span>
-                  </div>
+            <div class="action" v-if="item.action == 'update'">
+              <!-- {{ item.data}} -->
+              <div
+                v-for="(i, index) in item.data"
+                :key="index"
+                class="action_item"
+              >
+                <div>
+                  <span style="margin-right: 10px" class="label_name"
+                    >{{ index }}:</span
+                  >
+                  <span style="margin-right: 20px"
+                    >更新前：{{ i.before }}
+                  </span>
+                  <span> 更新后：{{ i.after }}</span>
                 </div>
               </div>
-              <div class="action" v-if="item.action == 'insert'">
-                <!-- {{ item.data}} -->
-                <div
-                  v-for="(i, index) in item.data"
-                  :key="index"
-                  class="action_item"
-                >
-                  <div>
-                    <span style="margin-right: 10px" class="label_name"
-                      >{{ index }}:</span
-                    >{{ i }}
-                  </div>
+            </div>
+            <div class="action" v-if="item.action == 'insert'">
+              <!-- {{ item.data}} -->
+              <div
+                v-for="(i, index) in item.data"
+                :key="index"
+                class="action_item"
+              >
+                <div>
+                  <span style="margin-right: 10px" class="label_name"
+                    >{{ index }}:</span
+                  >{{ i }}
                 </div>
               </div>
-              <div class="action" v-if="item.action == 'delete'">
-                <!-- {{ item.data}} -->
-                <div
-                  v-for="(i, index) in item.data"
-                  :key="index"
-                  class="action_item"
-                >
-                  <div>
-                    <span style="margin-right: 10px" class="label_name"
-                      >{{ index }}:</span
-                    >{{ i }}
-                  </div>
+            </div>
+            <div class="action" v-if="item.action == 'delete'">
+              <!-- {{ item.data}} -->
+              <div
+                v-for="(i, index) in item.data"
+                :key="index"
+                class="action_item"
+              >
+                <div>
+                  <span style="margin-right: 10px" class="label_name"
+                    >{{ index }}:</span
+                  >{{ i }}
                 </div>
               </div>
+            </div>
 
-              <div v-show="itemShow == index && kai" class="info_content">
-                <div class="border"></div>
-                <div v-for="(i, index) in item.all" :key="index">
-                  <div class="item_style">
-                    <span style="margin-right: 10px; color: rgb(111, 126, 126)"
-                      >{{ index }}:</span
-                    >{{ i }}
-                  </div>
+            <div v-show="itemShow == index && kai" class="info_content">
+              <div class="border"></div>
+              <div v-for="(i, index) in item.all" :key="index">
+                <div class="item_style">
+                  <span style="margin-right: 10px; color: rgb(111, 126, 126)"
+                    >{{ index }}:</span
+                  >{{ i }}
                 </div>
               </div>
-            </el-card>
+            </div>
+          </el-card>
 
           <div v-show="itemShow == index && kai" class="info_content">
             <div class="border"></div>

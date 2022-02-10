@@ -97,9 +97,22 @@ func (d *PostgresDriver) GetPrimaryWithName(tableName string) ([]string, error) 
 func (d *PostgresDriver) CreateTrigger(sql string, triggerName string) error {
 	triggers := d.ListTrigger()
 	if _, ok := triggers[triggerName]; ok {
-		return errors.New("触发器已经存在")
+		// return errors.New("触发器已经存在")
+		return nil
 	}
 
+	if err := d.DB.Exec(sql).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *PostgresDriver) CreateEventTrigger(sql, triggerName string) error {
+	triggers := d.ListEventTrigger()
+	if _, ok := triggers[triggerName]; ok {
+		// return errors.New("触发器已经存在")
+		return nil
+	}
 	if err := d.DB.Exec(sql).Error; err != nil {
 		return err
 	}
@@ -123,6 +136,24 @@ func (d *PostgresDriver) ListTrigger() map[string]bool {
 	var triggerName string
 
 	rows, err := d.DB.Raw("select tgname from pg_trigger").Rows()
+	if err != nil {
+		return map[string]bool{}
+	}
+	defer rows.Close()
+	for rows.Next() {
+		rows.Scan(&triggerName)
+		res[triggerName] = true
+	}
+
+	return res
+}
+
+func (d *PostgresDriver) ListEventTrigger() map[string]bool {
+	// select * from pg_event_trigger;
+	var res map[string]bool = map[string]bool{}
+	var triggerName string
+
+	rows, err := d.DB.Raw("select evtname from pg_event_trigger").Rows()
 	if err != nil {
 		return map[string]bool{}
 	}

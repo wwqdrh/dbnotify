@@ -21,6 +21,7 @@ type MetaService struct {
 	allPolicy    *sync.Map
 }
 
+// Init 初始化MetaService
 func (s *MetaService) Init() *MetaService {
 	if s.LogTableName == "" {
 		s.LogTableName = global.G_CONFIG.DataLog.LogTableName
@@ -32,6 +33,51 @@ func (s *MetaService) Init() *MetaService {
 	s.OutDate = global.G_CONFIG.DataLog.OutDate
 	s.MinLogNum = global.G_CONFIG.DataLog.MinLogNum
 	return s
+}
+
+// 初始化db的触发器等
+func (s *MetaService) InitialDB() error {
+	return global.G_DATADB.DB.Exec(`
+	CREATE EXTENSION IF NOT EXISTS hstore;
+	CREATE SCHEMA IF NOT EXISTS action_log;
+	CREATE TABLE IF NOT EXISTS action_log.ddl (
+	  id        serial NOT NULL,
+	  crt_time  timestamp WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+	  ctx       public.hstore,
+	  sql       text,
+	  tg_type   varchar(200),
+	  tg_event  varchar(200),
+	  /* Keys */
+	  CONSTRAINT aud_alter_pkey
+		PRIMARY KEY (id)
+	) WITH (OIDS = FALSE);
+	-- 事件触发器函数
+	CREATE OR REPLACE FUNCTION ddl_end_log_function()     
+	  RETURNS event_trigger                    
+	 LANGUAGE plpgsql  
+	  AS $$  
+	  declare 
+			 rec hstore;  
+	BEGIN  
+	  --RAISE NOTICE 'this is etgr1, event:%, command:%', tg_event, tg_tag; 
+	  select hstore(pg_stat_activity.*) into rec from pg_stat_activity where pid=pg_backend_pid();
+	  insert into %s ("table_name", "log", "action", "time") 
+	  values (SELECT
+		now(),
+		classid,
+		objid,
+		objsubid,
+		command_tag,
+		object_type,
+		schema_name,
+		object_identity,
+		in_extension
+		FROM pg_event_trigger_ddl_commands() left join select(rec,rec->'query',tg_tag,tg_event)); 
+	 END;  
+	$$;  
+	drop event trigger if exists ddl_end_log_trigger;
+	create EVENT TRIGGER ddl_end_log_trigger ON ddl_command_end when TAG IN ('CREATE TABLE', 'DROP TABLE', 'ALTER TABLE') EXECUTE PROCEDURE ddl_end_log_function();  
+	`, s.LogTableName).Error
 }
 
 // InitApp 读取表的策略
@@ -49,7 +95,9 @@ func (s *MetaService) InitApp(tables ...interface{}) (errs []error) {
 
 	for _, table := range tables {
 		// s.Register(table, s.MinLogNum, s.OutDate, nil, nil)
-		s.RegisterWithPolicy(table.(*request.TablePolicy))
+		if err := s.RegisterWithPolicy(table.(*request.TablePolicy)); err != nil {
+			fmt.Println(err)
+		}
 	}
 
 	return
@@ -158,7 +206,7 @@ func (s *MetaService) buildTrigger(tableName string) error {
 	funcName := tableName + "_auto_log_recored()"
 	triggerName := tableName + "_auto_log_trigger"
 
-	return global.G_DATADB.CreateTrigger(fmt.Sprintf(`
+	if err := global.G_DATADB.CreateTrigger(fmt.Sprintf(`
 		create or replace FUNCTION %s RETURNS trigger
 		LANGUAGE plpgsql
 	    AS $$
@@ -190,8 +238,60 @@ func (s *MetaService) buildTrigger(tableName string) error {
 		s.LogTableName, tableName,
 		s.LogTableName, tableName,
 		triggerName, tableName, funcName), triggerName,
-	)
+	); err != nil {
+		return err
+	}
 
+	// 记录表结构变更
+	if err := global.G_DATADB.CreateEventTrigger(fmt.Sprintf(`
+	CREATE EXTENSION IF NOT EXISTS hstore;
+	CREATE OR REPLACE FUNCTION ddl_end_log_function()     
+	  RETURNS event_trigger                    
+	 LANGUAGE plpgsql  
+	  AS $$  
+	  declare 
+			 rec hstore;  
+			 logjson json;
+			 t varchar(255);
+	BEGIN  
+	  select hstore(pg_stat_activity.*) into rec from pg_stat_activity where pid=pg_backend_pid();
+	  t := SPLIT_PART((select object_identity FROM pg_event_trigger_ddl_commands() where object_type = 'table'), '.', 2);
+	  select json_build_object('data', json_agg(rec->'query')) into logjson;
+
+	  insert into %s ("table_name", "log", "action", "time") 
+	  values (t, logjson, 'ddl', CURRENT_TIMESTAMP); 
+	 END;  
+	$$; 
+	create EVENT TRIGGER ddl_end_log_trigger ON ddl_command_end when TAG IN ('CREATE TABLE', 'ALTER TABLE') EXECUTE PROCEDURE ddl_end_log_function();
+	`, s.LogTableName), "ddl_end_log_trigger"); err != nil {
+		return err
+	}
+
+	if err := global.G_DATADB.CreateEventTrigger(fmt.Sprintf(`
+	CREATE EXTENSION IF NOT EXISTS hstore;
+	CREATE OR REPLACE FUNCTION ddl_drop_log_function()     
+	RETURNS event_trigger                    
+	LANGUAGE plpgsql  
+	AS $$  
+	declare 
+		rec hstore;  
+		logjson json;
+		t varchar(255);
+	BEGIN  
+	select hstore(pg_stat_activity.*) into rec from pg_stat_activity where pid=pg_backend_pid();
+	t := SPLIT_PART((select object_identity FROM pg_event_trigger_dropped_objects() where object_type in ('table', 'table column') limit 1), '.', 2);
+	select json_build_object('data', json_agg(rec->'query')) into logjson;
+
+	insert into %s ("table_name", "log", "action", "time") 
+	values (t, logjson, 'ddl', CURRENT_TIMESTAMP); 
+	END;  
+	$$; 
+	CREATE EVENT TRIGGER ddl_sql_drop_trigger on sql_drop EXECUTE PROCEDURE ddl_drop_log_function();
+	`, s.LogTableName), "ddl_sql_drop_trigger"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *MetaService) registerCheck(table interface{}) bool {

@@ -110,40 +110,6 @@ func (l LocalLog) removeRecord(dbName, date, field string, day int, minNum int) 
 // SearchRecord 按照字段名 以及开始结束时间进行搜索
 func (l LocalLog) SearchRecordByField(dbName string, fields []string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	res := []map[string]interface{}{}
-	// for _, field := range fields {
-	// 	var item []map[string]interface{}
-	// 	if start == nil && end == nil {
-	// 		startstr, endstr := l.GetKeyPin(field), l.GetLastKeyPin(field)
-	// 		data, err := global.G_LOGDB.IteratorByRange(dbName, startstr, endstr)
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 		if data == nil {
-	// 			continue
-	// 		}
-	// 		for _, i := range data {
-	// 			for _, c := range i {
-	// 				c["field"] = field
-	// 				item = append(item, c)
-	// 			}
-	// 		}
-	// 	} else if start == nil && end != nil {
-	// 		startstr, endstr := l.GetKeyPin(field), l.GetKeyBuilder(field, datautil.ParseTime(end)[:10])
-	// 		data, err := global.G_LOGDB.IteratorByRange(dbName, startstr, endstr)
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 		for _, i := range data {
-	// 			for _, c := range i {
-	// 				c["field"] = field
-	// 				item = append(item, c)
-	// 			}
-	// 		}
-
-	// 	}
-	// 	res = append(res, item...)
-	// }
-
 	if page == 0 {
 		page = 1
 	}
