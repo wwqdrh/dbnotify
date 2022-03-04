@@ -13,7 +13,8 @@ import (
 func main() {
 	//	const outputPlugin = "test_decoding"
 	const outputPlugin = "pgoutput"
-	conn, err := pgconn.Connect(context.Background(), "postgres://postgres:123456@127.0.0.1/hui_dm?replication=database")
+	conn, err := pgconn.Connect(context.Background(), "postgres://postgres:123456@127.0.0.1:5432/hui_dm?replication=database")
+	// conn, err := pgconn.Connect(context.Background(), "postgres://postgres:123456@127.0.0.1:5432/hui_dm?replication=database")
 	if err != nil {
 		log.Fatalln("failed to connect to PostgreSQL server:", err)
 	}
