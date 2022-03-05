@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:14
+    image: pg_wal2json:latest
     container_name: postgres
     ports:
       - "5432:5432"
@@ -11,5 +11,6 @@ services:
       - "-c"
       - "wal_level=logical"
       - "-c"
-      - "log_statement=mod"
-
+      - "max_wal_senders=4"
+      - "-c"
+      - "max_replication_slots=4"
