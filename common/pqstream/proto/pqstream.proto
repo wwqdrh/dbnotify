@@ -1,18 +1,9 @@
 syntax = "proto3";
-package pqs;
+package proto;
 
-import "github.com/golang/protobuf/ptypes/struct/struct.proto";
+import "google/protobuf/struct.proto";
 
-service PQStream {
-  // Listen responds with a stream of database operations.
-  rpc Listen (ListenRequest) returns (stream Event) {}
-}
-
-// A request to listen to database event streams.
-message ListenRequest {
-  // if provided, this string will be used to match table names to track.
-  string table_regexp = 1;
-}
+option go_package = ".;proto";
 
 // An operation in the database.
 enum Operation {

@@ -1,22 +1,17 @@
-package cdcstream
+package pqstream
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io"
 	"log"
-	"net"
 	"os"
-	"os/exec"
 	"regexp"
 	"testing"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/wwqdrh/datamanager/common/cdcstream/pqs"
-	"google.golang.org/grpc"
 )
 
 var testConnectionString = "postgres://localhost?sslmode=disable"
@@ -37,6 +32,69 @@ func init() {
 	if s := os.Getenv("PQSTREAM_TEST_DB_TMPL_URL"); s != "" {
 		testConnectionStringTemplate = s
 	}
+}
+
+func TestServerWithSubscribe(t *testing.T) {
+	timeoutCtx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+
+	// 模拟channel
+	queue := make(chan string, 10)
+
+	// 初始化server
+	go func(c context.Context) {
+		tableRe, err := regexp.Compile(".*")
+		if err != nil {
+			return
+		}
+
+		opts := []ServerOption{
+			WithTableRegexp(tableRe),
+		}
+
+		server, err := NewServer("postgres://postgres:123456@127.0.0.1:5432/hui_dm?sslmode=disable", opts...)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		if err = errors.Wrap(server.RemoveTriggers(), "RemoveTriggers"); err != nil {
+			t.Error(err)
+		}
+		if err = server.InstallTriggers(); err != nil {
+			t.Error(err)
+		}
+
+		go func() {
+			if err = server.HandleEvents(c, queue); err != nil {
+				// TODO(tmc): try to be more graceful
+				log.Fatalln(err)
+			}
+		}()
+
+		for {
+			select {
+			case <-c.Done():
+				fmt.Println("退出1")
+				return
+			}
+		}
+	}(timeoutCtx)
+
+	// 初始化监听者
+	go func(c context.Context) {
+		for {
+			select {
+			case <-c.Done():
+				fmt.Println("退出2")
+				return
+			case data := <-queue:
+				fmt.Println(data)
+			}
+		}
+	}(timeoutCtx)
+
+	time.Sleep(30 * time.Second)
 }
 
 func TestWithTableRegexp(t *testing.T) {
@@ -68,7 +126,7 @@ func TestNewServer(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		check   func(t *testing.T, s *Server)
+		check   func(t *testing.T, s *Stream)
 		wantErr bool
 	}{
 		{"bad", args{
@@ -165,17 +223,17 @@ func TestServer_HandleEvents(t *testing.T) {
 	db := dbOrSkip(t)
 	type testCase struct {
 		name    string
-		fn      func(*testing.T, *Server)
+		fn      func(*testing.T, *Stream)
 		wantErr bool
 	}
 	tests := []testCase{
 		{"basics", nil, false},
-		{"basic_insert", func(t *testing.T, s *Server) {
+		{"basic_insert", func(t *testing.T, s *Stream) {
 			if _, err := s.db.Exec(testInsert); err != nil {
 				t.Fatal(err)
 			}
 		}, false},
-		{"basic_insert_and_update", func(t *testing.T, s *Server) {
+		{"basic_insert_and_update", func(t *testing.T, s *Stream) {
 			if _, err := s.db.Exec(testInsert); err != nil {
 				t.Fatal(err)
 			}
@@ -191,7 +249,7 @@ func TestServer_HandleEvents(t *testing.T) {
 		if alsoUpdate {
 			caseName += "_and_update"
 		}
-		return testCase{caseName, func(t *testing.T, s *Server) {
+		return testCase{caseName, func(t *testing.T, s *Stream) {
 			insert := fmt.Sprintf(testInsertTemplate, mkString(n, '.'))
 			s.logger.Debugln("inserting", n)
 			if _, err := s.db.Exec(insert); err != nil {
@@ -240,7 +298,7 @@ func TestServer_HandleEvents(t *testing.T) {
 				}
 			}()
 			go func(t *testing.T, tt testCase) {
-				if err := s.HandleEvents(ctx); (err != nil) != tt.wantErr {
+				if err := s.HandleEvents(ctx, nil); (err != nil) != tt.wantErr {
 					t.Errorf("Server.HandleEvents(%v) error = %v, wantErr %v", ctx, err, tt.wantErr)
 				}
 			}(t, tt)
@@ -252,109 +310,6 @@ func TestServer_HandleEvents(t *testing.T) {
 			}
 			<-ctx.Done()
 
-		})
-	}
-}
-
-const integrationExec = "TEST_INTEGRATION_EXEC_ENV"
-
-func TestServer_Listen(t *testing.T) {
-	db := dbOrSkip(t)
-	type args struct {
-		NInserts           int
-		IntegrationExecEnv string
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		{"basics", args{NInserts: 2}, true},
-		{"python_integration", args{
-			NInserts:           10,
-			IntegrationExecEnv: "TEST_PYTHON_INTEGRATION_EXEC",
-		}, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(tt.args.NInserts+1)*time.Second)
-			defer cancel()
-
-			lis, err := net.Listen("tcp", "")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer lis.Close()
-			port := lis.Addr().(*net.TCPAddr).Port
-			srv := grpc.NewServer()
-
-			cs, cleanup := testDBConn(t, db, tt.name)
-			defer cleanup()
-			l := logrus.New()
-			l.Level = logrus.DebugLevel
-			sctx, scancel := context.WithCancel(ctx)
-			s, err := NewServer(cs, WithLogger(l), WithContext(sctx))
-
-			if err != nil {
-				t.Fatal(err)
-			}
-			s.InstallTriggers()
-			defer s.RemoveTriggers()
-			defer s.Close()
-
-			defer srv.Stop()
-			pqs.RegisterPQStreamServer(srv, s)
-			go srv.Serve(lis)
-
-			// if the case supplies an integration client to run, start it.
-			if tt.args.IntegrationExecEnv != "" {
-				integrationExec := os.Getenv(tt.args.IntegrationExecEnv)
-				t.Log("intergration exec", integrationExec)
-				cmd := exec.Command("sh", []string{"-c", integrationExec}...)
-				cmd.Env = os.Environ()
-				cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%v", port))
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				go func() {
-					if err := cmd.Run(); err != nil {
-						t.Fatal(err)
-					}
-				}()
-			}
-
-			go func() {
-				defer scancel()
-				go s.HandleEvents(sctx)
-				// generate some traffic
-				for i := 0; i < tt.args.NInserts; i++ {
-					log.Println("inserting", i)
-					time.Sleep(time.Second)
-					if _, err := s.db.Exec(testInsert); err != nil {
-						s.logger.Error(err)
-					}
-				}
-			}()
-
-			conn, err := grpc.Dial(fmt.Sprintf(":%v", port), grpc.WithInsecure())
-			if err != nil {
-				t.Fatal(err)
-			}
-			c := pqs.NewPQStreamClient(conn)
-
-			client, err := c.Listen(ctx, &pqs.ListenRequest{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for {
-				ev, err := client.Recv()
-				if err != nil {
-					if err == io.EOF {
-						return
-					}
-					t.Fatal(err)
-				}
-				t.Log("got event", ev)
-			}
 		})
 	}
 }

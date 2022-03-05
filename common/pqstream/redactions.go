@@ -1,10 +1,10 @@
-package cdcstream
+package pqstream
 
 import (
 	"encoding/json"
 	"strings"
 
-	"github.com/wwqdrh/datamanager/common/cdcstream/pqs"
+	"github.com/wwqdrh/datamanager/common/pqstream/proto"
 )
 
 // FieldRedactions describes how redaction fields are specified.
@@ -23,14 +23,14 @@ func DecodeRedactions(r string) (FieldRedactions, error) {
 
 // WithFieldRedactions controls which fields are redacted from the feed.
 func WithFieldRedactions(r FieldRedactions) ServerOption {
-	return func(s *Server) {
+	return func(s *Stream) {
 		s.redactions = r
 	}
 }
 
 // redactFields search through redactionMap if there's any redacted fields
 // specified that match the fields of the current event.
-func (s *Server) redactFields(e *pqs.RawEvent) {
+func (s *Stream) redactFields(e *proto.RawEvent) {
 	if tables, ok := s.redactions[e.GetSchema()]; ok {
 		if fields, ok := tables[e.GetTable()]; ok {
 			for _, rf := range fields {

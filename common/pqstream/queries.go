@@ -1,4 +1,4 @@
-package cdcstream
+package pqstream
 
 var (
 	sqlQueryTables = `

@@ -1,11 +1,11 @@
-package cdcstream
+package pqstream
 
 import (
 	"testing"
 
 	google_protobuf "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
-	"github.com/wwqdrh/datamanager/common/cdcstream/pqs"
+	"github.com/wwqdrh/datamanager/common/pqstream/proto"
 )
 
 func TestServer_redactFields(t *testing.T) {
@@ -23,7 +23,7 @@ func TestServer_redactFields(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	event := &pqs.RawEvent{
+	event := &proto.RawEvent{
 		Schema: "public",
 		Table:  "users",
 		Payload: &google_protobuf.Struct{
@@ -46,20 +46,20 @@ func TestServer_redactFields(t *testing.T) {
 
 	type args struct {
 		redactions FieldRedactions
-		incoming   *pqs.RawEvent
-		expected   *pqs.RawEvent
+		incoming   *proto.RawEvent
+		expected   *proto.RawEvent
 	}
 	tests := []struct {
 		name string
 		args args
 	}{
 		{"nil", args{redactions: rfields, incoming: nil}},
-		{"nil_payload", args{redactions: rfields, incoming: &pqs.RawEvent{}}},
-		{"nil_payload_matching", args{redactions: rfields, incoming: &pqs.RawEvent{
+		{"nil_payload", args{redactions: rfields, incoming: &proto.RawEvent{}}},
+		{"nil_payload_matching", args{redactions: rfields, incoming: &proto.RawEvent{
 			Schema: "public",
 			Table:  "users",
 		}}},
-		{"nil_payload_nonnil_previous", args{redactions: rfields, incoming: &pqs.RawEvent{
+		{"nil_payload_nonnil_previous", args{redactions: rfields, incoming: &proto.RawEvent{
 			Schema: "public",
 			Table:  "users",
 			Previous: &google_protobuf.Struct{
@@ -75,7 +75,7 @@ func TestServer_redactFields(t *testing.T) {
 			args: args{
 				redactions: rfields,
 				incoming:   event,
-				expected: &pqs.RawEvent{
+				expected: &proto.RawEvent{
 					Schema: "public",
 					Table:  "users",
 					Payload: &google_protobuf.Struct{
