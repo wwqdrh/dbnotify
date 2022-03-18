@@ -1,16 +1,13 @@
 package service
 
-import "github.com/wwqdrh/datamanager/service/dblog"
-
-var ServiceGroupApp *ServiceGroup
-
-type ServiceGroup struct {
-	Dblog *dblog.ServiceGroup
-}
+import (
+	exporter_repo "github.com/wwqdrh/datamanager/domain/exporter/repository"
+	stream_repo "github.com/wwqdrh/datamanager/domain/stream/repository"
+	stream_service "github.com/wwqdrh/datamanager/domain/stream/service/fulltrigger"
+)
 
 func InitService() {
-	dblog.InitService()
-	ServiceGroupApp = &ServiceGroup{
-		Dblog: dblog.ServiceGroupApp,
-	}
+	exporter_repo.InitRepo()
+	stream_repo.InitRepo()
+	stream_service.MetaService.Init()
 }

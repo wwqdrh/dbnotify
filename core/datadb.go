@@ -3,8 +3,7 @@ package core
 import (
 	"errors"
 
-	"github.com/wwqdrh/datamanager/common/driver"
-	"github.com/wwqdrh/datamanager/global"
+	"github.com/wwqdrh/datamanager/internal/driver"
 
 	"gorm.io/gorm"
 )
@@ -16,7 +15,7 @@ func InitDataDB(db ...*gorm.DB) CoreOption {
 			// 自己实例化一个
 			return errors.New("暂时必须传递gorm.DB对象")
 		}
-		global.G_DATADB = new(driver.PostgresDriver).InitWithDB(db[0])
+		G_DATADB = new(driver.PostgresDriver).InitWithDB(db[0])
 		return nil
 	}
 }

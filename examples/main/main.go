@@ -4,12 +4,12 @@ import (
 	"log"
 
 	"github.com/wwqdrh/datamanager"
+	"github.com/wwqdrh/datamanager/endpoint"
+	"github.com/wwqdrh/datamanager/pkg"
 
 	"time"
 
 	system_model "github.com/wwqdrh/datamanager/examples/main/system"
-	"github.com/wwqdrh/datamanager/model/dblog/request"
-	"github.com/wwqdrh/datamanager/router"
 
 	"github.com/wwqdrh/datamanager/examples/main/base"
 
@@ -39,20 +39,7 @@ func Start(h *hst.HST, middlewares ...hst.HandlerFunc) *hst.HST {
 			time.Sleep(time.Hour)
 		}
 	}()
-
-	if h == nil {
-		h = hst.New(nil)
-	}
-
-	ms := make([]hst.HandlerFunc, 0, len(middlewares))
-	ms = append(ms, middlewares...)
-
-	h.RegisterHandle(ms,
-		&backend{},
-		&router.Bdatalog{},
-	)
-
-	router.FileServer(h)
+	h = endpoint.RegisterApi(h, middlewares...)
 
 	return h
 }
@@ -80,15 +67,16 @@ func main() {
 	// 初始化datamanager db
 	// datamanager.InitDB(nil, &Company{})
 	datamanager.Register(system_model.DB(), nil,
-		&request.TablePolicy{
+		&pkg.TablePolicy{
 			Table:     Company{},
 			RelaField: "id",
 			Relations: "company_rela.company_id",
-		}, &request.TablePolicy{
+		}, &pkg.TablePolicy{
 			Table:     &CompanyRela{},
 			RelaField: "company_id",
 			Relations: "company.id",
 		})
+	datamanager.Start()
 	err := h.ListenHTTP(":8090")
 	log.Println("exit:", err)
 }

@@ -1,13 +1,12 @@
 package core
 
 import (
-	"github.com/wwqdrh/datamanager/common/datautil"
-	"github.com/wwqdrh/datamanager/global"
+	"github.com/wwqdrh/datamanager/internal/datautil"
 )
 
 func InitTaskQueue() CoreOption {
 	return func() error {
-		global.G_LogTaskQueue = datautil.NewQueue()
+		G_LogTaskQueue = datautil.NewQueue()
 
 		return nil
 	}

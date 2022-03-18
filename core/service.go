@@ -1,10 +1,10 @@
 package core
 
-import "github.com/wwqdrh/datamanager/service"
-
-func InitService() CoreOption {
+func InitService(fn ...func()) CoreOption {
 	return func() error {
-		service.InitService()
+		for _, item := range fn {
+			item()
+		}
 		return nil
 	}
 }
