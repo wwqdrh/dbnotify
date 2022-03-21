@@ -11,33 +11,25 @@ import (
 	"github.com/wwqdrh/datamanager/internal/datautil"
 )
 
-type ILeveldbLog interface {
-	base.IExpoterInitial
-	base.IExporterLog
-	base.IExporterAlias
-}
-
 type leveldbLog struct {
-	ctx context.Context
-	ch  chan map[string]interface{}
+	ch chan map[string]interface{}
 	base.IExporterAlias
 }
 
-func NewLeveldbLog() ILeveldbLog {
+func NewLeveldbLog() base.IExporter {
 	return &leveldbLog{}
 }
 
-func (l *leveldbLog) Install(ctx context.Context, ch chan map[string]interface{}, handler base.IExporterAlias) error {
+func (l *leveldbLog) Install(ch chan map[string]interface{}, handler base.IExporterAlias) error {
 	l.ch = ch
-	l.ctx = ctx
 	l.IExporterAlias = handler
 	return nil
 }
 
-func (l *leveldbLog) Start() error {
+func (l *leveldbLog) Start(ctx context.Context) error {
 	for {
 		select {
-		case <-l.ctx.Done():
+		case <-ctx.Done():
 			return errors.New("ctx退出")
 		case val := <-l.ch:
 			// tablename, outdate, minlognum, datar
@@ -50,23 +42,24 @@ func (l *leveldbLog) Start() error {
 	}
 }
 
-func (l *leveldbLog) GetAllLogger(tableName string, primaryFields []string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
-	res, err := repository.LogRepoV2.SearchAllRecord(tableName, primaryFields, start, end, page, pageSize)
-	if err != nil {
-		return nil, err
-	}
-	result := []map[string]interface{}{}
-	for _, item := range res {
-		result = append(result, map[string]interface{}{
-			"primary": l.TransPrimary(tableName, strings.Split(item["key"].(string), "@")[1]),
-			"log":     item["data"],
-		})
-	}
+func (l *leveldbLog) GetAllLogger(tableName string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+	// res, err := repository.LogRepoV2.SearchAllRecord(tableName, start, end, page, pageSize)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// result := []map[string]interface{}{}
+	// for _, item := range res {
+	// 	result = append(result, map[string]interface{}{
+	// 		"primary": l.TransPrimary(tableName, strings.Split(item["key"].(string), "@")[1]),
+	// 		"log":     item["data"],
+	// 	})
+	// }
 
-	return result, nil
+	// return result, nil
+	return nil, errors.New("TODO")
 }
 
-func (l *leveldbLog) GetLoggerByTime(tableName string, primaryID string, startTime, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+func (l *leveldbLog) GetLoggerByID(tableName string, primaryID string, startTime, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	res, err := repository.LogRepoV2.SearchRecordByField(tableName, primaryID, startTime, endTime, page, pageSize)
 	if err != nil {
 		return nil, err

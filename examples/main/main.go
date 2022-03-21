@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/wwqdrh/datamanager"
@@ -59,6 +60,8 @@ type CompanyRela struct {
 }
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// system_model.InitDB("postgres", "host=172.18.3.9 user=postgres password=postgres dbname=hui_test port=5435 sslmode=disable TimeZone=Asia/Shanghai")
 	system_model.InitDB("postgres", "host=localhost user=postgres password=123456 dbname=hui_dm_test port=5432 sslmode=disable TimeZone=Asia/Shanghai")
 
@@ -67,16 +70,16 @@ func main() {
 	// 初始化datamanager db
 	// datamanager.InitDB(nil, &Company{})
 	datamanager.Register(system_model.DB(), nil,
-		&pkg.TablePolicy{
+		pkg.TablePolicy{
 			Table:     Company{},
 			RelaField: "id",
 			Relations: "company_rela.company_id",
-		}, &pkg.TablePolicy{
+		}, pkg.TablePolicy{
 			Table:     &CompanyRela{},
 			RelaField: "company_id",
 			Relations: "company.id",
 		})
-	datamanager.Start()
+	datamanager.Start(ctx)
 	err := h.ListenHTTP(":8090")
 	log.Println("exit:", err)
 }
