@@ -16,32 +16,34 @@ import (
 	"github.com/wwqdrh/datamanager/internal/structhandler"
 )
 
-var DblogService = &dbService{
-	senseFields:  make(map[string][]string, 0),
-	task:         &sync.Map{},
-	logTableName: core.G_CONFIG.DataLog.LogTableName,
-	handler:      core.G_StructHandler,
-}
-
-type dbService struct {
+type DbService struct {
 	senseFields  map[string][]string //
 	task         *sync.Map           // string=>bool 当前任务的存储
 	logTableName string
 	handler      structhandler.IStructHandler
 }
 
-// 初始化
-func (s *dbService) Init(logTableName string, handler structhandler.IStructHandler) *dbService {
-	s.senseFields = map[string][]string{}
-	s.task = &sync.Map{}
-	s.logTableName = logTableName
-	s.handler = handler
-	return s
+func NewDbService() *DbService {
+	return (&DbService{
+		senseFields:  make(map[string][]string, 0),
+		task:         &sync.Map{},
+		logTableName: core.G_CONFIG.DataLog.LogTableName,
+		handler:      core.G_StructHandler,
+	})
 }
+
+// 初始化
+// func (s *DbService) Init(logTableName string, handler structhandler.IStructHandler) *DbService {
+// 	s.senseFields = map[string][]string{}
+// 	s.task = &sync.Map{}
+// 	s.logTableName = logTableName
+// 	s.handler = handler
+// 	return s
+// }
 
 // Dump 将log struct转换成map形式
 // 需要处理ddl的log格式以及dml数据的log格式
-func (s *dbService) Dump(logData []*stream_entity.LogTable, primaryFields []string) ([]map[string]interface{}, error) {
+func (s *DbService) Dump(logData []*stream_entity.LogTable, primaryFields []string) ([]map[string]interface{}, error) {
 	response := make([]map[string]interface{}, 0, len(logData))
 	var val map[string]interface{}
 	for _, item := range logData {
@@ -60,7 +62,7 @@ func (s *dbService) Dump(logData []*stream_entity.LogTable, primaryFields []stri
 }
 
 // 处理ddl
-func (s *dbService) dumpDDL(item *stream_entity.LogTable) map[string]interface{} {
+func (s *DbService) dumpDDL(item *stream_entity.LogTable) map[string]interface{} {
 	data, _ := datautil.JsonToMap(string(item.Log))
 	return map[string]interface{}{
 		"log":    data["data"].([]interface{})[0].(string), // 一般只有第一个ddl语句
@@ -70,7 +72,7 @@ func (s *dbService) dumpDDL(item *stream_entity.LogTable) map[string]interface{}
 }
 
 // 处理dml
-func (s *dbService) dumpDML(item *stream_entity.LogTable, primaryFields []string) map[string]interface{} {
+func (s *DbService) dumpDML(item *stream_entity.LogTable, primaryFields []string) map[string]interface{} {
 	data, _ := datautil.JsonToMap(string(item.Log))
 	senseFields := s.senseFields[item.TableName]
 	if len(senseFields) == 0 || senseFields[0] == "" {
@@ -90,7 +92,7 @@ func (s *dbService) dumpDML(item *stream_entity.LogTable, primaryFields []string
 }
 
 // Wash 写入日志时对数据结构的一些处理
-func (s *dbService) wash(data map[string]interface{}, action string, primaryFields []string, fieldNames ...string) map[string]interface{} {
+func (s *DbService) wash(data map[string]interface{}, action string, primaryFields []string, fieldNames ...string) map[string]interface{} {
 	if len(fieldNames) == 0 {
 		return data
 	}
@@ -200,13 +202,13 @@ func (s *dbService) wash(data map[string]interface{}, action string, primaryFiel
 }
 
 // SetSenseFields 设置监听的字段
-func (s *dbService) SetSenseFields(tableName string, data []string) {
+func (s *DbService) SetSenseFields(tableName string, data []string) {
 	s.senseFields[tableName] = data
 }
 
 // getPolicy 根据表名获取配置项
-func (s *dbService) getPolicy(s1 string) interface{} {
-	if policy, ok := MetaService.AllPolicy.Load(s1); !ok {
+func (s *DbService) getPolicy(s1 string) interface{} {
+	if policy, ok := DefaultMetaService().AllPolicy.Load(s1); !ok {
 		return nil
 	} else {
 		return policy
@@ -214,7 +216,7 @@ func (s *dbService) getPolicy(s1 string) interface{} {
 }
 
 // Run 运行
-func (s *dbService) Run(tableName string, fields []string, outdate, minLog int) error {
+func (s *DbService) Run(tableName string, fields []string, outdate, minLog int) error {
 	if _, ok := s.task.Load(tableName); ok {
 		return errors.New("已经在执行了")
 	}
@@ -248,7 +250,7 @@ func (s *dbService) Run(tableName string, fields []string, outdate, minLog int) 
 }
 
 // GetAllLogger 获取整体的记录行信息 还需要将关联表记录加载出来
-func (s *dbService) GetLogger(tableName string, primaryID string, startTime, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+func (s *DbService) GetLogger(tableName string, primaryID string, startTime, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	res, err := exporter_repo.LogRepoV2.SearchRecordByField(tableName, primaryID, startTime, endTime, page, pageSize)
 	if err != nil {
 		return nil, err
@@ -275,7 +277,7 @@ func (s *dbService) GetLogger(tableName string, primaryID string, startTime, end
 }
 
 // GetAllLogger 从leveldb中获取记录 并根据策略表中的多表关系 查询相关联的记录并组合
-func (s *dbService) GetAllLogger(tableName string, primaryFields []string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+func (s *DbService) GetAllLogger(tableName string, primaryFields []string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	res, err := exporter_repo.LogRepoV2.SearchAllRecord(tableName, primaryFields, start, end, page, pageSize)
 	if err != nil {
 		return nil, err
@@ -292,10 +294,10 @@ func (s *dbService) GetAllLogger(tableName string, primaryFields []string, start
 }
 
 // GetRelationLogger 获取与当前记录有关联的记录 值相同 时间戳差值不超过1分钟
-func (s *dbService) GetRelationLogger(tableName string, curVal interface{}, stamp time.Time) interface{} {
+func (s *DbService) GetRelationLogger(tableName string, curVal interface{}, stamp time.Time) interface{} {
 	// 1、获取relations
 	var policy *stream_entity.Policy
-	if val, ok := MetaService.AllPolicy.Load(tableName); !ok {
+	if val, ok := DefaultMetaService().AllPolicy.Load(tableName); !ok {
 		return errors.New("未发现当前表的策略")
 	} else {
 		policy = val.(*stream_entity.Policy)
@@ -311,7 +313,7 @@ func (s *dbService) GetRelationLogger(tableName string, curVal interface{}, stam
 			tName, fName = t[0], t[1]
 		}
 		var tpolicy *stream_entity.Policy
-		if val, ok := MetaService.AllPolicy.Load(tName); !ok {
+		if val, ok := DefaultMetaService().AllPolicy.Load(tName); !ok {
 			return errors.New("未发现当前表的策略")
 		} else {
 			tpolicy = val.(*stream_entity.Policy)
@@ -332,7 +334,7 @@ func (s *dbService) GetRelationLogger(tableName string, curVal interface{}, stam
 }
 
 // ParsePrimaryVal id,name=1,2
-func (s *dbService) ParsePrimaryVal(curVal string) map[string]string {
+func (s *DbService) ParsePrimaryVal(curVal string) map[string]string {
 	var keys, vals []string
 	{
 		t := strings.Split(curVal, "=")
@@ -348,7 +350,7 @@ func (s *dbService) ParsePrimaryVal(curVal string) map[string]string {
 	return cond
 }
 
-func (s *dbService) TransField(tableName string, records []map[string]interface{}) []map[string]interface{} {
+func (s *DbService) TransField(tableName string, records []map[string]interface{}) []map[string]interface{} {
 	res := []map[string]interface{}{}
 
 	// 字段id与名字的映射 需要更新leveldb中的备份
@@ -416,7 +418,7 @@ func (s *dbService) TransField(tableName string, records []map[string]interface{
 }
 
 // TransPrimary tableid与name之间的映射
-func (s *dbService) TransPrimary(tableName string, primaryStr string) string {
+func (s *DbService) TransPrimary(tableName string, primaryStr string) string {
 	if primaryStr == "type=ddl" {
 		return "type=ddl"
 	}
@@ -437,7 +439,7 @@ func (s *dbService) TransPrimary(tableName string, primaryStr string) string {
 // Load 从源数据中读取日志
 // 1、读取dml日志
 // 2、读取ddl日志
-func (s *dbService) Load() func(tableName string, id uint64, num int) ([]*stream_entity.LogTable, error) {
+func (s *DbService) Load() func(tableName string, id uint64, num int) ([]*stream_entity.LogTable, error) {
 	return func(tableName string, id uint64, num int) ([]*stream_entity.LogTable, error) {
 		data, err := stream_repo.LogTableRepo.ReadBytableNameAndLimit(tableName, id, num)
 		if err != nil {
@@ -448,7 +450,7 @@ func (s *dbService) Load() func(tableName string, id uint64, num int) ([]*stream
 }
 
 // Store 写入到日志库
-func (s *dbService) Store() func(policy *stream_entity.Policy, data []*stream_entity.LogTable) error {
+func (s *DbService) Store() func(policy *stream_entity.Policy, data []*stream_entity.LogTable) error {
 	return func(policy *stream_entity.Policy, data []*stream_entity.LogTable) error {
 		primaryFields := strings.Split(policy.PrimaryFields, ",")
 		datar, err := s.Dump(data, primaryFields)

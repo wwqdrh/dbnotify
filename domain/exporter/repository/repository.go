@@ -17,7 +17,7 @@ var (
 type fieldMappingRepo struct {
 }
 
-func InitRepo() {
+func init() {
 	LogLocalLogRepo = &entity.LocalLog{}
 	LogRepoV2 = &entity.LocalLog2{}
 	FieldMappingRepo = &fieldMappingRepo{}

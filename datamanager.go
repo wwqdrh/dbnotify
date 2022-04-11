@@ -3,29 +3,49 @@ package datamanager
 import (
 	"context"
 
-	"github.com/wwqdrh/datamanager/core"
-	"github.com/wwqdrh/datamanager/internal/structhandler"
-	"github.com/wwqdrh/datamanager/pkg"
-	"github.com/wwqdrh/datamanager/service"
-
 	"gorm.io/gorm"
+
+	"github.com/ohko/hst"
+	"github.com/wwqdrh/datamanager/app"
+	"github.com/wwqdrh/datamanager/app/service"
+	"github.com/wwqdrh/datamanager/core"
+	"github.com/wwqdrh/datamanager/domain/exporter"
+	"github.com/wwqdrh/datamanager/domain/stream"
+	stream_vo "github.com/wwqdrh/datamanager/domain/stream/vo"
+	"github.com/wwqdrh/datamanager/internal/structhandler"
 )
 
-// Register 初始化db等 调用时的入口函数
-func Register(db *gorm.DB, structHandler structhandler.IStructHandler, tables ...pkg.TablePolicy) error {
+type TablePolicy = stream_vo.TablePolicy
+
+type StructHandler = stream_vo.IStructHandler
+
+func init() {
 	core.Init(
 		core.InitConfig(),
-		core.InitDataDB(db),
+	)
+}
+
+// 加载路由 提供可视化界面
+func RegisterView(httpHandler *hst.HST) *hst.HST {
+	return app.RegisterApi(httpHandler)
+}
+
+// Register 初始化db等 调用时的入口函数
+func RegisterStream(db *gorm.DB, structHandler structhandler.IStructHandler, tables ...TablePolicy) error {
+	core.Init(
 		core.InitLogDB(),
 		core.InitTaskQueue(),
+		core.InitDataDB(db),
 		core.InitStructHandler(structHandler),
-		core.InitService(
-			service.InitService,
-			func() { service.InitPolicyService("trigger", "leveldb") },
+		core.InitDomain(
+			exporter.Register,
+			stream.Register,
 		),
 	)
 
-	if err := service.PolicyService.Initial(
+	// TODO: metaserver未注册 移到
+	if err := new(service.MetaService).InitApp(
+		// if err := service.NewPolicyService().Initial(
 		tables...,
 	); err != nil {
 		return err
@@ -37,16 +57,15 @@ func Register(db *gorm.DB, structHandler structhandler.IStructHandler, tables ..
 // AddTable 动态表
 func AddTable(table interface{}, fields []string, ignore []string) error {
 	// service.MetaService.AddTable(table, fields, ignore)
-	return service.PolicyService.RegisterTable(table, 10, 10, fields, ignore)
+	return service.NewPolicyService().RegisterTable(table, 10, 10, fields, ignore)
 }
 
 // Start 开启操作日志监听
-func Start(ctx context.Context) {
-	go service.PolicyService.LoadFactory()(ctx)
+func StartBackground(ctx context.Context) {
 	// 1个loader线程
-
+	go service.NewPolicyService().LoadFactory()(ctx)
 	// 10个writer线程
 	for i := 0; i < 10; i++ {
-		go service.PolicyService.WriteFactory()(ctx)
+		go service.NewPolicyService().WriteFactory()(ctx)
 	}
 }

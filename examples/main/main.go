@@ -5,8 +5,7 @@ import (
 	"log"
 
 	"github.com/wwqdrh/datamanager"
-	"github.com/wwqdrh/datamanager/endpoint"
-	"github.com/wwqdrh/datamanager/pkg"
+	"github.com/wwqdrh/datamanager/app"
 
 	"time"
 
@@ -40,7 +39,7 @@ func Start(h *hst.HST, middlewares ...hst.HandlerFunc) *hst.HST {
 			time.Sleep(time.Hour)
 		}
 	}()
-	h = endpoint.RegisterApi(h, middlewares...)
+	h = app.RegisterApi(h, middlewares...)
 
 	return h
 }
@@ -69,17 +68,17 @@ func main() {
 	Start(h)
 	// 初始化datamanager db
 	// datamanager.InitDB(nil, &Company{})
-	datamanager.Register(system_model.DB(), nil,
-		pkg.TablePolicy{
+	datamanager.RegisterStream(system_model.DB(), nil,
+		datamanager.TablePolicy{
 			Table:     Company{},
 			RelaField: "id",
 			Relations: "company_rela.company_id",
-		}, pkg.TablePolicy{
+		}, datamanager.TablePolicy{
 			Table:     &CompanyRela{},
 			RelaField: "company_id",
 			Relations: "company.id",
 		})
-	datamanager.Start(ctx)
+	datamanager.StartBackground(ctx)
 	err := h.ListenHTTP(":8090")
 	log.Println("exit:", err)
 }

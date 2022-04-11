@@ -14,17 +14,29 @@ import (
 	"github.com/wwqdrh/datamanager/internal/structhandler"
 )
 
-var MetaService *metaService = &metaService{}
+var defaultMetaService *MetaService
+var defaultMetaOnce = sync.Once{}
 
-type metaService struct {
+type MetaService struct {
 	OutDate      int    // 过期时间 单位天
 	MinLogNum    int    // 最少保留条数
 	LogTableName string // 日志临时表的名字
 	AllPolicy    *sync.Map
 }
 
-// Init 初始化metaService
-func (s *metaService) Init() *metaService {
+func NewMetaService() *MetaService {
+	return new(MetaService).Init()
+}
+
+func DefaultMetaService() *MetaService {
+	defaultMetaOnce.Do(func() {
+		defaultMetaService = NewMetaService()
+	})
+	return defaultMetaService
+}
+
+// Init 初始化MetaService
+func (s *MetaService) Init() *MetaService {
 	if s.LogTableName == "" {
 		s.LogTableName = core.G_CONFIG.DataLog.LogTableName
 	}
@@ -38,7 +50,7 @@ func (s *metaService) Init() *metaService {
 }
 
 // 初始化db的触发器等
-func (s *metaService) InitialDB() error {
+func (s *MetaService) InitialDB() error {
 	return core.G_DATADB.DB.Exec(`
 	CREATE EXTENSION IF NOT EXISTS hstore;
 	CREATE SCHEMA IF NOT EXISTS action_log;
@@ -83,7 +95,7 @@ func (s *metaService) InitialDB() error {
 }
 
 // InitApp 读取表的策略
-func (s *metaService) InitApp(tables ...*vo.TablePolicy) (errs []error) {
+func (s *MetaService) InitApp(tables ...vo.TablePolicy) (errs []error) {
 	// 表策略
 	stream_repo.PolicyRepo.Migrate(core.G_DATADB.DB)
 	// 读取策略
@@ -104,27 +116,27 @@ func (s *metaService) InitApp(tables ...*vo.TablePolicy) (errs []error) {
 }
 
 // AddTable 添加动态变
-func (s *metaService) AddTable(table interface{}, senseFields []string, ignoreFields []string) {
-	s.RegisterWithPolicy(&vo.TablePolicy{
+func (s *MetaService) AddTable(table interface{}, senseFields []string, ignoreFields []string) {
+	s.RegisterWithPolicy(vo.TablePolicy{
 		Table:        table,
 		SenseFields:  senseFields,
 		IgnoreFields: ignoreFields,
 	})
 }
 
-func (s *metaService) GetAllPolicy() *sync.Map {
+func (s *MetaService) GetAllPolicy() *sync.Map {
 	return s.AllPolicy
 }
 
-func (s *metaService) Register(table interface{}, min_log_num, outdate int, fields []string, ignoreFields []string) error {
-	return s.RegisterWithPolicy(&vo.TablePolicy{
+func (s *MetaService) Register(table interface{}, min_log_num, outdate int, fields []string, ignoreFields []string) error {
+	return s.RegisterWithPolicy(vo.TablePolicy{
 		Table:        table,
 		SenseFields:  fields,
 		IgnoreFields: ignoreFields,
 	})
 }
 
-func (s *metaService) RegisterWithPolicy(pol *vo.TablePolicy) error {
+func (s *MetaService) RegisterWithPolicy(pol vo.TablePolicy) error {
 	table := pol.Table
 	if !s.registerCheck(table) { // 检查table是否合法
 		return fmt.Errorf("%v不合法", table)
@@ -139,7 +151,7 @@ func (s *metaService) RegisterWithPolicy(pol *vo.TablePolicy) error {
 		if p, err := s.buildPolicy(tableName, s.MinLogNum, s.OutDate, pol); err != nil {
 			return err
 		} else {
-			DblogService.SetSenseFields(tableName, strings.Split(p.Fields, ","))
+			NewDbService().SetSenseFields(tableName, strings.Split(p.Fields, ","))
 		}
 
 		if err := s.buildTrigger(tableName); err != nil {
@@ -150,7 +162,7 @@ func (s *metaService) RegisterWithPolicy(pol *vo.TablePolicy) error {
 }
 
 // buildPolicy 为新表注册策略
-func (s *metaService) buildPolicy(tableName string, min_log_num, outdate int, pol *vo.TablePolicy) (*stream_entity.Policy, error) {
+func (s *MetaService) buildPolicy(tableName string, min_log_num, outdate int, pol vo.TablePolicy) (*stream_entity.Policy, error) {
 	// 最少记录条数
 	if min_log_num < s.MinLogNum {
 		min_log_num = s.MinLogNum
@@ -202,7 +214,7 @@ func (s *metaService) buildPolicy(tableName string, min_log_num, outdate int, po
 	return policy, nil
 }
 
-func (s *metaService) buildTrigger(tableName string) error {
+func (s *MetaService) buildTrigger(tableName string) error {
 	funcName := tableName + "_auto_log_recored()"
 	triggerName := tableName + "_auto_log_trigger"
 
@@ -294,7 +306,7 @@ func (s *metaService) buildTrigger(tableName string) error {
 	return nil
 }
 
-func (s *metaService) registerCheck(table interface{}) bool {
+func (s *MetaService) registerCheck(table interface{}) bool {
 	if val, ok := table.(string); ok {
 		// 判断表是否存在
 		tables := core.G_StructHandler.GetTables()
@@ -310,7 +322,7 @@ func (s *metaService) registerCheck(table interface{}) bool {
 	}
 }
 
-func (s *metaService) UnRegister(table string) error {
+func (s *MetaService) UnRegister(table string) error {
 	s.registerCheck(table)
 
 	if err := stream_repo.PolicyRepo.DeleteByTableName(core.G_DATADB.DB, table); err != nil {
@@ -323,7 +335,7 @@ func (s *metaService) UnRegister(table string) error {
 	return nil
 }
 
-func (s *metaService) ListTable() []string {
+func (s *MetaService) ListTable() []string {
 	res := []string{}
 	s.AllPolicy.Range(func(key, value interface{}) bool {
 		item := value.(*stream_entity.Policy)
@@ -333,33 +345,33 @@ func (s *metaService) ListTable() []string {
 	return res
 }
 
-func (s *metaService) ListTableField(tableName string) []*structhandler.Fields {
+func (s *MetaService) ListTableField(tableName string) []*structhandler.Fields {
 	if core.G_StructHandler == nil {
 		return nil
 	}
 	return core.G_StructHandler.GetFields(tableName)
 }
 
-func (s *metaService) ListTableAllLog(tableName string, startTime *time.Time, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+func (s *MetaService) ListTableAllLog(tableName string, startTime *time.Time, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	if val, ok := s.AllPolicy.Load(tableName); !ok {
 		return nil, errors.New(tableName + "未进行监听")
 	} else {
 		policy := val.(*stream_entity.Policy)
 		primaryFields := strings.Split(policy.PrimaryFields, ",")
-		return DblogService.GetAllLogger(tableName, primaryFields, startTime, endTime, page, pageSize)
+		return NewDbService().GetAllLogger(tableName, primaryFields, startTime, endTime, page, pageSize)
 	}
 }
 
-func (s *metaService) ListTableLog(tableName string, recordID string, startTime *time.Time, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+func (s *MetaService) ListTableLog(tableName string, recordID string, startTime *time.Time, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	if _, ok := s.AllPolicy.Load(tableName); !ok {
 		return nil, errors.New(tableName + "未进行监听")
 	} else {
 		// policy := val.(*model.Policy)
-		return DblogService.GetLogger(tableName, recordID, startTime, endTime, page, pageSize)
+		return NewDbService().GetLogger(tableName, recordID, startTime, endTime, page, pageSize)
 	}
 }
 
-func (s *metaService) ModifyPolicy(tableName string, args map[string]interface{}) error {
+func (s *MetaService) ModifyPolicy(tableName string, args map[string]interface{}) error {
 	var policy *stream_entity.Policy
 	if val, ok := s.AllPolicy.Load(tableName); !ok {
 		return errors.New("表未注册")
@@ -383,7 +395,7 @@ func (s *metaService) ModifyPolicy(tableName string, args map[string]interface{}
 	return nil
 }
 
-func (s *metaService) ModifyOutdate(tableName string, outdate int) error {
+func (s *MetaService) ModifyOutdate(tableName string, outdate int) error {
 	var policy *stream_entity.Policy
 	if val, ok := s.AllPolicy.Load(tableName); !ok {
 		return errors.New("表未注册")
@@ -401,7 +413,7 @@ func (s *metaService) ModifyOutdate(tableName string, outdate int) error {
 	return nil
 }
 
-func (s *metaService) ModifyField(tableName string, fields []string) error {
+func (s *MetaService) ModifyField(tableName string, fields []string) error {
 	var policy *stream_entity.Policy
 	if val, ok := s.AllPolicy.Load(tableName); !ok {
 		return errors.New("表未注册")
@@ -409,11 +421,11 @@ func (s *metaService) ModifyField(tableName string, fields []string) error {
 		policy = val.(*stream_entity.Policy)
 	}
 	policy.Fields = strings.Join(fields, ",")
-	DblogService.SetSenseFields(tableName, fields)
+	NewDbService().SetSenseFields(tableName, fields)
 	return core.G_DATADB.DB.Save(policy).Error
 }
 
-func (s *metaService) ModifyMinLogNum(tableName string, minLogNum int) error {
+func (s *MetaService) ModifyMinLogNum(tableName string, minLogNum int) error {
 	var policy *stream_entity.Policy
 	if val, ok := s.AllPolicy.Load(tableName); !ok {
 		return errors.New("表未注册")

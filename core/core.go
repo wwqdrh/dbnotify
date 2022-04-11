@@ -1,7 +1,6 @@
 package core
 
 import (
-	"github.com/wwqdrh/datamanager/config"
 	"github.com/wwqdrh/datamanager/internal/datautil"
 	"github.com/wwqdrh/datamanager/internal/driver"
 	"github.com/wwqdrh/datamanager/internal/structhandler"
@@ -21,7 +20,7 @@ var (
 	G_DATADB *driver.PostgresDriver
 	G_LOGDB  *driver.LevelDBDriver
 
-	G_CONFIG        config.AllConfig
+	G_CONFIG        AllConfig
 	G_LogTaskQueue  *datautil.Queue
 	G_StructHandler structhandler.IStructHandler
 )

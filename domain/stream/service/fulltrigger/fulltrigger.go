@@ -30,8 +30,8 @@ type (
 
 // StartFullTrigger 全量触发器启动
 func StartFullTrigger() {
-	defaultLogLoad = newLogLoadRunner(core.G_LogTaskQueue, DblogService.Load())
-	defaultLogStore = newLogStoreRunner(core.G_LogTaskQueue, 10, DblogService.Store())
+	defaultLogLoad = newLogLoadRunner(core.G_LogTaskQueue, NewDbService().Load())
+	defaultLogStore = newLogStoreRunner(core.G_LogTaskQueue, 10, NewDbService().Store())
 
 	go defaultLogLoad.Run()
 	for _, item := range defaultLogStore {
@@ -65,8 +65,10 @@ func newLogStoreRunner(queue *datautil.Queue, num int, fn func(policy *entity.Po
 func (r *DefaultLogLoad) Run() {
 	var id uint64
 
+	s := DefaultMetaService()
+
 	for {
-		MetaService.GetAllPolicy().Range(func(key, value interface{}) bool {
+		s.GetAllPolicy().Range(func(key, value interface{}) bool {
 			tableName := key.(string)
 			policy := value.(*entity.Policy)
 			res, err := r.fn(tableName, id, core.G_CONFIG.DataLog.PerReadNum)

@@ -16,9 +16,26 @@ data-log:
   min-log-num: 10
   log-table-name: "_action_log"
   per-read-num: 1000
+  stream-policy: "trigger"
+  export-policy: "leveldb"
 leveldb:
   log-path: "./version"
 `
+
+type AllConfig struct {
+	DataLog struct {
+		PerReadNum   int    `mapstructure:"per-read-num" yaml:"per-read-num"`     // 每次读取所需要的记录数
+		OutDate      int    `mapstructure:"out-date" yaml:"out-date"`             // 过期时间 单位天
+		MinLogNum    int    `mapstructure:"min-log-num" yaml:"min-log-num"`       // 最少保留条数
+		LogTableName string `mapstructure:"log-table-name" yaml:"log-table-name"` // 日志临时表的名字
+		StreamPolicy string `mapstructure:"stream-policy" yaml:"stream-policy"`   // 读取日志的策略
+		ExportPolicy string `mapstructure:"export-policy" yaml:"export-policy"`   // 转存日志的策略
+	} `mapstructure:"data-log" yaml:"data-log"`
+	PostgresConf struct{} `mapstructure:"postgres" yaml:"postgres"`
+	LevelDBConf  struct {
+		LogPath string `mapstructure:"log-path" yaml:"log-path"`
+	} `mapstructure:"leveldb" yaml:"leveldb"`
+}
 
 func InitConfig(path ...string) CoreOption {
 	return func() error {
