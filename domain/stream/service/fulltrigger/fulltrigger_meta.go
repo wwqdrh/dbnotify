@@ -10,7 +10,7 @@ import (
 	stream_entity "github.com/wwqdrh/datamanager/domain/stream/entity"
 	stream_repo "github.com/wwqdrh/datamanager/domain/stream/repository"
 	"github.com/wwqdrh/datamanager/domain/stream/vo"
-	"github.com/wwqdrh/datamanager/internal/structhandler"
+	"github.com/wwqdrh/datamanager/runtime"
 )
 
 var defaultMetaService *MetaService
@@ -344,7 +344,7 @@ func (s *MetaService) ListTable() []string {
 	return res
 }
 
-func (s *MetaService) ListTableField(tableName string) []*structhandler.Fields {
+func (s *MetaService) ListTableField(tableName string) []*runtime.Fields {
 	if R.GetFieldHandler() == nil {
 		return nil
 	}

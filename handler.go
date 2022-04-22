@@ -1,9 +1,13 @@
-package structhandler
+package datamanager
 
 import (
 	"github.com/wwqdrh/datamanager/internal/driver"
+	"github.com/wwqdrh/datamanager/runtime"
 )
 
+var DefaultHandler = new(BaseStructHandler)
+
+// 默认的转换
 const (
 	defaultTableSql = `select relname as "table_id", cast(obj_description(relname::regclass, 'pg_class') as varchar) as "table_name"` +
 		` from pg_class where relname in (select tablename from pg_tables where schemaname='public') order by relname asc;`
@@ -12,43 +16,16 @@ const (
 		` FROM pg_class as c, pg_attribute as a WHERE c.relname = ? and a.attrelid = c.oid and a.attnum>0 order by a.attrelid;`
 )
 
-type (
-	Table struct {
-		TableID   string `json:"table_id"`
-		TableName string `json:"table_name"`
-		IsListen  bool   `json:"is_listen"`
-	}
-
-	Fields struct {
-		FieldID   string `json:"field_id"`
-		FieldName string `json:"field_name"`
-	}
-
-	IStructHandler interface {
-		GetTables() []*Table
-		GetFields(string) []*Fields
-		GetFieldName(string, string) string // 通过表名，字段id 获取字段名
-		GetTableName(string) string         // 通过表id获取表名字
-	}
-
-	BaseStructHandler struct {
-		db *driver.PostgresDriver
-	}
-)
-
-// 默认的动态字段转换器
-func NewBaseStructHandler(db *driver.PostgresDriver) IStructHandler {
-	return &BaseStructHandler{
-		db: db,
-	}
+type BaseStructHandler struct {
+	db *driver.PostgresDriver
 }
 
-func (h *BaseStructHandler) GetTables() []*Table {
+func (h *BaseStructHandler) GetTables() []*runtime.Table {
 	if h.db == nil {
 		return nil
 	}
 
-	var res []*Table
+	var res []*runtime.Table
 	err := h.db.DB.Raw(defaultTableSql).Scan(&res).Error
 	if err != nil {
 		return nil
@@ -61,12 +38,12 @@ func (h *BaseStructHandler) GetTables() []*Table {
 	return res
 }
 
-func (h *BaseStructHandler) GetFields(table string) []*Fields {
+func (h *BaseStructHandler) GetFields(table string) []*runtime.Fields {
 	if h.db == nil {
 		return nil
 	}
 
-	var res []*Fields
+	var res []*runtime.Fields
 
 	tableName := h.db.GetTableName(table)
 	err := h.db.DB.Raw(defaultFieldSql, tableName).Scan(&res).Error

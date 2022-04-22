@@ -1,6 +1,9 @@
 package runtime
 
-import "gorm.io/gorm"
+import (
+	"github.com/wwqdrh/datamanager/internal/pgwatcher"
+	"gorm.io/gorm"
+)
 
 type (
 	IStructHandler interface {
@@ -33,16 +36,16 @@ type TablePolicy struct {
 }
 
 type RuntimeConfig struct {
-	Outdate       int            // 保存的记录时间
-	MinLogNum     int            // 最少保留的日志数
-	TempLogTable  string         // 临时日志名字
-	PerReadNum    int            // 一次读取多少条
-	ReadPolicy    string         // 读取的策略
-	WritePolicy   string         // 保存的策略
-	LogDataPath   string         // 保存的存储记录位置
-	DB            *gorm.DB       // 可以外部调用者自己传递
-	Handler       IStructHandler // 表字段的映射
-	RegisterTable []TablePolicy  // 初始化注册的静态监听的表
+	Outdate       int                     // 保存的记录时间
+	MinLogNum     int                     // 最少保留的日志数
+	TempLogTable  string                  // 临时日志名字
+	PerReadNum    int                     // 一次读取多少条
+	ReadPolicy    string                  // 读取的策略
+	WritePolicy   string                  // 保存的策略
+	LogDataPath   string                  // 保存的存储记录位置
+	DB            *gorm.DB                // 可以外部调用者自己传递
+	Handler       IStructHandler          // 表字段的映射
+	RegisterTable []pgwatcher.TablePolicy // 初始化注册的静态监听的表
 }
 
 type RuntimeConfigOpt = func(*RuntimeConfig)

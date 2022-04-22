@@ -7,7 +7,6 @@ import (
 	stream_entity "github.com/wwqdrh/datamanager/domain/stream/entity"
 	stream_service "github.com/wwqdrh/datamanager/domain/stream/service/fulltrigger"
 	"github.com/wwqdrh/datamanager/domain/stream/vo"
-	"github.com/wwqdrh/datamanager/internal/structhandler"
 	"github.com/wwqdrh/datamanager/runtime"
 )
 
@@ -43,10 +42,10 @@ func (s *MetaService) Register(table interface{}, min_log_num, outdate int, fiel
 	return stream_service.DefaultMetaService().Register(table, min_log_num, outdate, fields, ignoreFields)
 }
 
-func (s *MetaService) ListTable2() []*structhandler.Table {
-	result := []*structhandler.Table{}
+func (s *MetaService) ListTable2() []*runtime.Table {
+	result := []*runtime.Table{}
 
-	tableMapping := map[string]*structhandler.Table{}
+	tableMapping := map[string]*runtime.Table{}
 	for _, item := range result {
 		tableMapping[item.TableName] = item
 	}
@@ -77,6 +76,6 @@ func (s *MetaService) ModifyPolicy(tableName string, args map[string]interface{}
 	return stream_service.DefaultMetaService().ModifyPolicy(tableName, args)
 }
 
-func (s *MetaService) ListTableField(tableName string) []*structhandler.Fields {
+func (s *MetaService) ListTableField(tableName string) []*runtime.Fields {
 	return stream_service.DefaultMetaService().ListTableField(tableName)
 }
