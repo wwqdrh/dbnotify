@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wwqdrh/datamanager/core"
 	stream_entity "github.com/wwqdrh/datamanager/domain/stream/entity"
 	stream_repo "github.com/wwqdrh/datamanager/domain/stream/repository"
 	"github.com/wwqdrh/datamanager/domain/stream/vo"
@@ -38,20 +37,20 @@ func DefaultMetaService() *MetaService {
 // Init 初始化MetaService
 func (s *MetaService) Init() *MetaService {
 	if s.LogTableName == "" {
-		s.LogTableName = core.G_CONFIG.DataLog.LogTableName
+		s.LogTableName = R.GetConfig().TempLogTable
 	}
 	if s.OutDate <= 0 {
 		s.OutDate = 15
 	}
 	s.AllPolicy = new(sync.Map)
-	s.OutDate = core.G_CONFIG.DataLog.OutDate
-	s.MinLogNum = core.G_CONFIG.DataLog.MinLogNum
+	s.OutDate = R.GetConfig().Outdate
+	s.MinLogNum = R.GetConfig().MinLogNum
 	return s
 }
 
 // 初始化db的触发器等
 func (s *MetaService) InitialDB() error {
-	return core.G_DATADB.DB.Exec(`
+	return R.GetDB().DB.Exec(`
 	CREATE EXTENSION IF NOT EXISTS hstore;
 	CREATE SCHEMA IF NOT EXISTS action_log;
 	CREATE TABLE IF NOT EXISTS action_log.ddl (
@@ -97,13 +96,13 @@ func (s *MetaService) InitialDB() error {
 // InitApp 读取表的策略
 func (s *MetaService) InitApp(tables ...vo.TablePolicy) (errs []error) {
 	// 表策略
-	stream_repo.PolicyRepo.Migrate(core.G_DATADB.DB)
+	stream_repo.PolicyRepo.Migrate(R.GetDB().DB)
 	// 读取策略
-	for _, item := range stream_repo.PolicyRepo.GetAllData(core.G_DATADB.DB) {
+	for _, item := range stream_repo.PolicyRepo.GetAllData(R.GetDB().DB) {
 		s.AllPolicy.Store(item.TableName, item)
 	}
 	// 添加日志表
-	core.G_DATADB.DB.Table(s.LogTableName).AutoMigrate(&stream_entity.LogTable{})
+	R.GetDB().DB.Table(s.LogTableName).AutoMigrate(&stream_entity.LogTable{})
 
 	for _, table := range tables {
 		// s.Register(table, s.MinLogNum, s.OutDate, nil, nil)
@@ -142,7 +141,7 @@ func (s *MetaService) RegisterWithPolicy(pol vo.TablePolicy) error {
 		return fmt.Errorf("%v不合法", table)
 	}
 
-	tableName := core.G_DATADB.GetTableName(table)
+	tableName := R.GetDB().GetTableName(table)
 	if tableName == "" {
 		return errors.New("表名不能为空")
 	}
@@ -170,13 +169,13 @@ func (s *MetaService) buildPolicy(tableName string, min_log_num, outdate int, po
 	if outdate < s.OutDate {
 		outdate = s.OutDate
 	}
-	primary, err := core.G_DATADB.GetPrimary(tableName)
+	primary, err := R.GetDB().GetPrimary(tableName)
 	if err != nil {
 		return nil, err
 	}
 	primaryFields := strings.Join(primary, ",")
 	fieldsStr := []string{}
-	allFields := core.G_StructHandler.GetFields(tableName)
+	allFields := R.GetFieldHandler().GetFields(tableName)
 	ignoreMapping := map[string]bool{}
 	for _, item := range pol.IgnoreFields {
 		ignoreMapping[item] = true
@@ -205,7 +204,7 @@ func (s *MetaService) buildPolicy(tableName string, min_log_num, outdate int, po
 	}
 
 	if err := stream_repo.PolicyRepo.CreateNoExist(
-		core.G_DATADB.DB, policy,
+		R.GetDB().DB, policy,
 		map[string]interface{}{"table_name": tableName},
 	); err != nil {
 		return nil, err
@@ -218,7 +217,7 @@ func (s *MetaService) buildTrigger(tableName string) error {
 	funcName := tableName + "_auto_log_recored()"
 	triggerName := tableName + "_auto_log_trigger"
 
-	if err := core.G_DATADB.CreateTrigger(fmt.Sprintf(`
+	if err := R.GetDB().CreateTrigger(fmt.Sprintf(`
 		create or replace FUNCTION %s RETURNS trigger
 		LANGUAGE plpgsql
 	    AS $$
@@ -255,7 +254,7 @@ func (s *MetaService) buildTrigger(tableName string) error {
 	}
 
 	// 记录表结构变更
-	if err := core.G_DATADB.CreateEventTrigger(fmt.Sprintf(`
+	if err := R.GetDB().CreateEventTrigger(fmt.Sprintf(`
 	CREATE EXTENSION IF NOT EXISTS hstore;
 	CREATE OR REPLACE FUNCTION ddl_end_log_function()     
 	  RETURNS event_trigger                    
@@ -279,7 +278,7 @@ func (s *MetaService) buildTrigger(tableName string) error {
 		return err
 	}
 
-	if err := core.G_DATADB.CreateEventTrigger(fmt.Sprintf(`
+	if err := R.GetDB().CreateEventTrigger(fmt.Sprintf(`
 	CREATE EXTENSION IF NOT EXISTS hstore;
 	CREATE OR REPLACE FUNCTION ddl_drop_log_function()     
 	RETURNS event_trigger                    
@@ -309,7 +308,7 @@ func (s *MetaService) buildTrigger(tableName string) error {
 func (s *MetaService) registerCheck(table interface{}) bool {
 	if val, ok := table.(string); ok {
 		// 判断表是否存在
-		tables := core.G_StructHandler.GetTables()
+		tables := R.GetFieldHandler().GetTables()
 		for _, item := range tables {
 			if item.TableID == val {
 				return true
@@ -317,7 +316,7 @@ func (s *MetaService) registerCheck(table interface{}) bool {
 		}
 		return false
 	} else {
-		core.G_DATADB.DB.AutoMigrate(table)
+		R.GetDB().DB.AutoMigrate(table)
 		return true
 	}
 }
@@ -325,10 +324,10 @@ func (s *MetaService) registerCheck(table interface{}) bool {
 func (s *MetaService) UnRegister(table string) error {
 	s.registerCheck(table)
 
-	if err := stream_repo.PolicyRepo.DeleteByTableName(core.G_DATADB.DB, table); err != nil {
+	if err := stream_repo.PolicyRepo.DeleteByTableName(R.GetDB().DB, table); err != nil {
 		return errors.New("删除记录失败")
 	}
-	if err := core.G_DATADB.DeleteTrigger(table + "_auto_log_trigger"); err != nil {
+	if err := R.GetDB().DeleteTrigger(table + "_auto_log_trigger"); err != nil {
 		return errors.New("删除触发器失败")
 	}
 	s.AllPolicy.Delete(table)
@@ -346,10 +345,12 @@ func (s *MetaService) ListTable() []string {
 }
 
 func (s *MetaService) ListTableField(tableName string) []*structhandler.Fields {
-	if core.G_StructHandler == nil {
+	if R.GetFieldHandler() == nil {
 		return nil
 	}
-	return core.G_StructHandler.GetFields(tableName)
+	// TODO
+	return nil
+	// return R.GetFieldHandler().GetFields(tableName)
 }
 
 func (s *MetaService) ListTableAllLog(tableName string, startTime *time.Time, endTime *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
@@ -389,7 +390,7 @@ func (s *MetaService) ModifyPolicy(tableName string, args map[string]interface{}
 		policy.MinLogNum = val
 	}
 
-	if err := core.G_DATADB.DB.Save(policy).Error; err != nil {
+	if err := R.GetDB().DB.Save(policy).Error; err != nil {
 		return err
 	}
 	return nil
@@ -407,7 +408,7 @@ func (s *MetaService) ModifyOutdate(tableName string, outdate int) error {
 	}
 
 	policy.Outdate = outdate
-	if err := core.G_DATADB.DB.Save(policy).Error; err != nil {
+	if err := R.GetDB().DB.Save(policy).Error; err != nil {
 		return err
 	}
 	return nil
@@ -422,7 +423,7 @@ func (s *MetaService) ModifyField(tableName string, fields []string) error {
 	}
 	policy.Fields = strings.Join(fields, ",")
 	NewDbService().SetSenseFields(tableName, fields)
-	return core.G_DATADB.DB.Save(policy).Error
+	return R.GetDB().DB.Save(policy).Error
 }
 
 func (s *MetaService) ModifyMinLogNum(tableName string, minLogNum int) error {
@@ -433,5 +434,5 @@ func (s *MetaService) ModifyMinLogNum(tableName string, minLogNum int) error {
 		policy = val.(*stream_entity.Policy)
 	}
 	policy.MinLogNum = minLogNum
-	return core.G_DATADB.DB.Save(policy).Error
+	return R.GetDB().DB.Save(policy).Error
 }

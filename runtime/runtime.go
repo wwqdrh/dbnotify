@@ -18,8 +18,8 @@ type IRuntime interface {
 	SetBackQueue(func() (*datautil.Queue, error)) error
 
 	// 表字段的转换
-	GetFieldHandler() interface{}
-	SetFieldHandler(func() (interface{}, error)) error
+	GetFieldHandler() IStructHandler
+	SetFieldHandler(func() (IStructHandler, error)) error
 
 	// 变量
 	GetConfig() *RuntimeConfig
@@ -73,11 +73,11 @@ func (r *runtime) SetBackQueue(fn func() (*datautil.Queue, error)) error {
 }
 
 // 表字段的转换
-func (r *runtime) GetFieldHandler() interface{} {
+func (r *runtime) GetFieldHandler() IStructHandler {
 	panic("not implemented") // TODO: Implement
 }
 
-func (r *runtime) SetFieldHandler(_ func() (interface{}, error)) error {
+func (r *runtime) SetFieldHandler(_ func() (IStructHandler, error)) error {
 	panic("not implemented") // TODO: Implement
 }
 

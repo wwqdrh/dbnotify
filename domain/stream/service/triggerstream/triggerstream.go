@@ -7,14 +7,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wwqdrh/datamanager/core"
 	"github.com/wwqdrh/datamanager/domain/stream/entity"
 	"github.com/wwqdrh/datamanager/domain/stream/repository"
 	"github.com/wwqdrh/datamanager/domain/stream/service/base"
 	"github.com/wwqdrh/datamanager/domain/stream/vo"
+	"github.com/wwqdrh/datamanager/runtime"
 )
 
 // 通过触发器全量记录所有的操作
+
+var R = runtime.Runtime
 
 type triggerStream struct {
 	policys sync.Map
@@ -31,13 +33,13 @@ func NewTriggerStream() base.ITriggerStream {
 func (s *triggerStream) Install(tables ...vo.TablePolicy) (chan map[string]interface{}, error) {
 	// 初始化
 	// 表策略
-	repository.PolicyRepo.Migrate(core.G_DATADB.DB)
+	repository.PolicyRepo.Migrate(R.GetDB().DB)
 	// 读取策略
-	for _, item := range repository.PolicyRepo.GetAllData(core.G_DATADB.DB) {
+	for _, item := range repository.PolicyRepo.GetAllData(R.GetDB().DB) {
 		s.policys.Store(item.TableName, item)
 	}
 	// 添加日志表
-	core.G_DATADB.DB.Table(core.G_CONFIG.DataLog.LogTableName).AutoMigrate(&entity.LogTable{})
+	R.GetDB().DB.Table(R.GetConfig().TempLogTable).AutoMigrate(&entity.LogTable{})
 
 	for _, table := range tables {
 		// s.Register(table, s.MinLogNum, s.OutDate, nil, nil)
@@ -60,7 +62,7 @@ func (s *triggerStream) registerWithPolicy(pol vo.TablePolicy) error {
 		return fmt.Errorf("%v不合法", table)
 	}
 
-	tableName := core.G_DATADB.GetTableName(table)
+	tableName := R.GetDB().GetTableName(table)
 	if tableName == "" {
 		return errors.New("表名不能为空")
 	}
@@ -72,7 +74,7 @@ func (s *triggerStream) registerWithPolicy(pol vo.TablePolicy) error {
 			// DblogService.SetSenseFields(tableName, strings.Split(p.Fields, ","))
 		}
 
-		if err := buildTrigger(tableName, core.G_CONFIG.DataLog.LogTableName); err != nil {
+		if err := buildTrigger(tableName, R.GetConfig().TempLogTable); err != nil {
 			return err
 		}
 	}
@@ -83,7 +85,7 @@ func (s *triggerStream) registerWithPolicy(pol vo.TablePolicy) error {
 func (s *triggerStream) registerCheck(table interface{}) bool {
 	if val, ok := table.(string); ok {
 		// 判断表是否存在
-		tables := core.G_StructHandler.GetTables()
+		tables := R.GetFieldHandler().GetTables()
 		for _, item := range tables {
 			if item.TableID == val {
 				return true
@@ -91,7 +93,7 @@ func (s *triggerStream) registerCheck(table interface{}) bool {
 		}
 		return false
 	} else {
-		core.G_DATADB.DB.AutoMigrate(table)
+		R.GetDB().DB.AutoMigrate(table)
 		return true
 	}
 }
@@ -121,7 +123,7 @@ func (s *triggerStream) start() {
 
 	for {
 		for tableName, _ := range s.GetAllPolicy() {
-			err := s.Start(context.TODO(), tableName, id, core.G_CONFIG.DataLog.PerReadNum)
+			err := s.Start(context.TODO(), tableName, id, R.GetConfig().PerReadNum)
 			if err != nil {
 				fmt.Println("获取数据失败", err.Error())
 			}

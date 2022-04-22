@@ -3,8 +3,10 @@ package notifytrigger
 import (
 	"sync"
 
-	"github.com/wwqdrh/datamanager/core"
+	"github.com/wwqdrh/datamanager/runtime"
 )
+
+var R = runtime.Runtime
 
 var MetaService *metaService = &metaService{}
 
@@ -82,14 +84,14 @@ type metaService struct {
 // Init 初始化metaService
 func (s *metaService) Init() *metaService {
 	if s.LogTableName == "" {
-		s.LogTableName = core.G_CONFIG.DataLog.LogTableName
+		s.LogTableName = R.GetConfig().TempLogTable
 	}
 	if s.OutDate <= 0 {
 		s.OutDate = 15
 	}
 	s.AllPolicy = new(sync.Map)
-	s.OutDate = core.G_CONFIG.DataLog.OutDate
-	s.MinLogNum = core.G_CONFIG.DataLog.MinLogNum
+	s.OutDate = R.GetConfig().Outdate
+	s.MinLogNum = R.GetConfig().MinLogNum
 	return s
 }
 

@@ -3,14 +3,15 @@ package repository
 import (
 	"gorm.io/gorm"
 
-	"github.com/wwqdrh/datamanager/core"
 	"github.com/wwqdrh/datamanager/domain/stream/entity"
+	"github.com/wwqdrh/datamanager/runtime"
 )
 
 var (
 	PolicyRepo   entity.Policy  = entity.Policy{} // repository
 	VersionRepo  entity.Version = entity.Version{}
 	LogTableRepo *LogTableRepository
+	R            = runtime.Runtime
 )
 
 type LogTableRepository struct {
@@ -20,8 +21,8 @@ type LogTableRepository struct {
 
 func InitRepo() {
 	LogTableRepo = &LogTableRepository{
-		logTableName: core.G_CONFIG.DataLog.LogTableName,
-		db:           core.G_DATADB.DB,
+		logTableName: R.GetConfig().TempLogTable,
+		db:           R.GetDB().DB,
 	}
 }
 

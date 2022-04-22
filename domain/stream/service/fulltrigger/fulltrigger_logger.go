@@ -7,28 +7,29 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wwqdrh/datamanager/core"
+	"github.com/wwqdrh/datamanager/runtime"
 
 	exporter_repo "github.com/wwqdrh/datamanager/domain/exporter/repository"
 	stream_entity "github.com/wwqdrh/datamanager/domain/stream/entity"
 	stream_repo "github.com/wwqdrh/datamanager/domain/stream/repository"
 	"github.com/wwqdrh/datamanager/internal/datautil"
-	"github.com/wwqdrh/datamanager/internal/structhandler"
 )
+
+var R = runtime.Runtime
 
 type DbService struct {
 	senseFields  map[string][]string //
 	task         *sync.Map           // string=>bool 当前任务的存储
 	logTableName string
-	handler      structhandler.IStructHandler
+	// handler      structhandler.IStructHandler
 }
 
 func NewDbService() *DbService {
 	return (&DbService{
 		senseFields:  make(map[string][]string, 0),
 		task:         &sync.Map{},
-		logTableName: core.G_CONFIG.DataLog.LogTableName,
-		handler:      core.G_StructHandler,
+		logTableName: R.GetConfig().TempLogTable,
+		// handler:      R.GetFieldHandler(),
 	})
 }
 
@@ -76,7 +77,7 @@ func (s *DbService) dumpDML(item *stream_entity.LogTable, primaryFields []string
 	data, _ := datautil.JsonToMap(string(item.Log))
 	senseFields := s.senseFields[item.TableName]
 	if len(senseFields) == 0 || senseFields[0] == "" {
-		for _, item := range core.G_StructHandler.GetFields(item.TableName) {
+		for _, item := range R.GetFieldHandler().GetFields(item.TableName) {
 			senseFields = append(senseFields, item.FieldID)
 		}
 	}
@@ -354,7 +355,7 @@ func (s *DbService) TransField(tableName string, records []map[string]interface{
 	res := []map[string]interface{}{}
 
 	// 字段id与名字的映射 需要更新leveldb中的备份
-	allfields := core.G_StructHandler.GetFields(tableName)
+	allfields := R.GetFieldHandler().GetFields(tableName)
 	fieldMapping := map[string]string{}
 	for _, item := range allfields {
 		fieldMapping[item.FieldID] = item.FieldName
@@ -430,7 +431,7 @@ func (s *DbService) TransPrimary(tableName string, primaryStr string) string {
 	}
 	newKey := []string{}
 	for _, item := range strings.Split(key, ",") {
-		newKey = append(newKey, s.handler.GetFieldName(tableName, item))
+		newKey = append(newKey, R.GetFieldHandler().GetFieldName(tableName, item))
 	}
 
 	return strings.Join(newKey, ",") + "=" + val

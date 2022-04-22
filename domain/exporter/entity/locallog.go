@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/wwqdrh/datamanager/core"
 	"github.com/wwqdrh/datamanager/internal/datautil"
+	"github.com/wwqdrh/datamanager/runtime"
 )
 
 ////////////////////
@@ -14,6 +14,8 @@ import (
 // 要查找时按照字段 然后过期时间之前的直接删除
 // 删除是惰性删除 存的时候把字段+日期之前的进行删除
 ////////////////////
+
+var R = runtime.Runtime
 
 type (
 	LocalLog struct {
@@ -27,7 +29,7 @@ func (l LocalLog) Write(tableName string, data []map[string]interface{}, fields 
 	}
 
 	dbName := tableName + "_log.db" // 一般都是同一个数据表的数据
-	_, err := core.G_LOGDB.GetDB(dbName)
+	_, err := R.GetLogDB().GetDB(dbName)
 	if err != nil {
 		return err
 	}
@@ -65,7 +67,7 @@ func (l LocalLog) AddLog(db string, date, field string, record map[string]interf
 	l.removeRecord(db, date, field, outdate, minLog)
 
 	key := l.GetKeyBuilder(field, date)
-	err := core.G_LOGDB.WriteByArray(db, key, record)
+	err := R.GetLogDB().WriteByArray(db, key, record)
 	if err != nil {
 		return err
 	}
@@ -76,15 +78,15 @@ func (l LocalLog) AddLog(db string, date, field string, record map[string]interf
 func (l LocalLog) addPin(dbName, date, field string) error {
 	key := l.GetKeyPin(field)
 	lastKey := l.GetLastKeyPin(field)
-	_, err := core.G_LOGDB.Get(dbName, key)
+	_, err := R.GetLogDB().Get(dbName, key)
 	if err != nil {
-		if err2 := core.G_LOGDB.Put(dbName, key, []byte("")); err2 != nil {
+		if err2 := R.GetLogDB().Put(dbName, key, []byte("")); err2 != nil {
 			return err2
 		}
 	}
-	_, err = core.G_LOGDB.Get(dbName, lastKey)
+	_, err = R.GetLogDB().Get(dbName, lastKey)
 	if err != nil {
-		if err2 := core.G_LOGDB.Put(dbName, lastKey, []byte("")); err2 != nil {
+		if err2 := R.GetLogDB().Put(dbName, lastKey, []byte("")); err2 != nil {
 			return err2
 		}
 	}
@@ -96,7 +98,7 @@ func (l LocalLog) addPin(dbName, date, field string) error {
 func (l LocalLog) removeRecord(dbName, date, field string, day int, minNum int) error {
 	datetime := time.Now().AddDate(0, 0, -day)
 	start, end := l.GetKeyPin(field), l.GetKeyBuilder(field, datautil.ParseTime(&datetime)[:10])
-	nums, err := core.G_LOGDB.GetRangeNum(dbName, start, end)
+	nums, err := R.GetLogDB().GetRangeNum(dbName, start, end)
 	nums = nums - 2 // 需要删除两个占位key
 	if err != nil {
 		return err
@@ -104,7 +106,7 @@ func (l LocalLog) removeRecord(dbName, date, field string, day int, minNum int) 
 	if nums <= minNum {
 		return nil
 	}
-	return core.G_LOGDB.Remove(dbName, start, end, nums-minNum)
+	return R.GetLogDB().Remove(dbName, start, end, nums-minNum)
 }
 
 // SearchRecord 按照字段名 以及开始结束时间进行搜索

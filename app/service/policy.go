@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/wwqdrh/datamanager/core"
 	exporter_base "github.com/wwqdrh/datamanager/domain/exporter/service/base"
 	"github.com/wwqdrh/datamanager/domain/exporter/service/leveldblog"
 	stream_base "github.com/wwqdrh/datamanager/domain/stream/service/base"
@@ -24,12 +23,12 @@ func NewPolicyService() *PolicyService {
 }
 
 func (s *PolicyService) Init() *PolicyService {
-	switch core.G_CONFIG.DataLog.StreamPolicy {
+	switch R.GetConfig().ReadPolicy {
 	default:
 		s.stream = triggerstream.NewTriggerStream()
 	}
 
-	switch core.G_CONFIG.DataLog.ExportPolicy {
+	switch R.GetConfig().WritePolicy {
 	default:
 		s.exporter = leveldblog.NewLeveldbLog()
 	}

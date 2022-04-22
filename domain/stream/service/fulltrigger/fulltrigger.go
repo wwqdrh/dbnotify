@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/wwqdrh/datamanager/core"
 	"github.com/wwqdrh/datamanager/domain/stream/entity"
 	stream_repo "github.com/wwqdrh/datamanager/domain/stream/repository"
 	"github.com/wwqdrh/datamanager/internal/datautil"
@@ -30,8 +29,9 @@ type (
 
 // StartFullTrigger 全量触发器启动
 func StartFullTrigger() {
-	defaultLogLoad = newLogLoadRunner(core.G_LogTaskQueue, NewDbService().Load())
-	defaultLogStore = newLogStoreRunner(core.G_LogTaskQueue, 10, NewDbService().Store())
+
+	defaultLogLoad = newLogLoadRunner(R.GetBackQueue(), NewDbService().Load())
+	defaultLogStore = newLogStoreRunner(R.GetBackQueue(), 10, NewDbService().Store())
 
 	go defaultLogLoad.Run()
 	for _, item := range defaultLogStore {
@@ -71,7 +71,7 @@ func (r *DefaultLogLoad) Run() {
 		s.GetAllPolicy().Range(func(key, value interface{}) bool {
 			tableName := key.(string)
 			policy := value.(*entity.Policy)
-			res, err := r.fn(tableName, id, core.G_CONFIG.DataLog.PerReadNum)
+			res, err := r.fn(tableName, id, R.GetConfig().PerReadNum)
 			if err != nil {
 				fmt.Println("获取数据失败", err.Error())
 				return true

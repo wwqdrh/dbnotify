@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wwqdrh/datamanager/core"
 	"github.com/wwqdrh/datamanager/internal/datautil"
 )
 
@@ -59,12 +58,12 @@ func (l LocalLog2) Write(tableName string, data []map[string]interface{}, outdat
 	}
 
 	dbName := tableName + "_log.db" // 一般都是同一个数据表的数据
-	_, err := core.G_LOGDB.GetDB(dbName)
+	_, err := R.GetLogDB().GetDB(dbName)
 	if err != nil {
 		return err
 	}
 
-	primaryFields, err := core.G_DATADB.GetPrimary(tableName)
+	primaryFields, err := R.GetDB().GetPrimary(tableName)
 	if err != nil {
 		return err
 	}
@@ -120,7 +119,7 @@ func (l LocalLog2) AddLog(db string, date, field string, record map[string]inter
 	}
 
 	key := l.GetKeyBuilder(date, field)
-	err := core.G_LOGDB.WriteByArray(db, key, record)
+	err := R.GetLogDB().WriteByArray(db, key, record)
 	if err != nil {
 		return err
 	}
@@ -131,15 +130,15 @@ func (l LocalLog2) AddLog(db string, date, field string, record map[string]inter
 func (l LocalLog2) addPin(dbName, date, field string) error {
 	key := l.GetKeyPin(field)
 	lastKey := l.GetLastKeyPin(field)
-	_, err := core.G_LOGDB.Get(dbName, key)
+	_, err := R.GetLogDB().Get(dbName, key)
 	if err != nil {
-		if err2 := core.G_LOGDB.Put(dbName, key, []byte("")); err2 != nil {
+		if err2 := R.GetLogDB().Put(dbName, key, []byte("")); err2 != nil {
 			return err2
 		}
 	}
-	_, err = core.G_LOGDB.Get(dbName, lastKey)
+	_, err = R.GetLogDB().Get(dbName, lastKey)
 	if err != nil {
-		if err2 := core.G_LOGDB.Put(dbName, lastKey, []byte("")); err2 != nil {
+		if err2 := R.GetLogDB().Put(dbName, lastKey, []byte("")); err2 != nil {
 			return err2
 		}
 	}
@@ -151,7 +150,7 @@ func (l LocalLog2) addPin(dbName, date, field string) error {
 func (l LocalLog2) removeRecord(dbName, date, field string, day int, minNum int) error {
 	datetime := time.Now().AddDate(0, 0, -day)
 	start, end := l.GetKeyPin(field), l.GetKeyBuilder(datautil.ParseTime(&datetime)[:10], field)
-	nums, err := core.G_LOGDB.GetRangeNum(dbName, start, end)
+	nums, err := R.GetLogDB().GetRangeNum(dbName, start, end)
 	nums = nums - 2 // 需要删除两个占位key
 	if err != nil {
 		return err
@@ -159,7 +158,7 @@ func (l LocalLog2) removeRecord(dbName, date, field string, day int, minNum int)
 	if nums <= minNum {
 		return nil
 	}
-	return core.G_LOGDB.Remove(dbName, start, end, nums-minNum)
+	return R.GetLogDB().Remove(dbName, start, end, nums-minNum)
 }
 
 func (l LocalLog2) GetTimeRange(key string, start, end *time.Time) (string, string) {
@@ -181,7 +180,7 @@ func (l LocalLog2) SearchAllRecord(tableName string, primaryFields []string, sta
 	primaryStr := strings.Join(primaryFields, ",") + "="
 	dbName := tableName + "_log.db" // 一般都是同一个数据表的数据
 	startstr, endstr := l.GetTimeRange(primaryStr, start, end)
-	res, err := core.G_LOGDB.IteratorByRange(dbName, startstr, endstr)
+	res, err := R.GetLogDB().IteratorByRange(dbName, startstr, endstr)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +207,7 @@ func (l LocalLog2) SearchRecordByField(tableName string, primaryID string, start
 	// primaryStr := strings.Join(primaryFields, ",") + "="
 	dbName := tableName + "_log.db" // 一般都是同一个数据表的数据
 	startstr, endstr := l.GetTimeRange(primaryID, start, end)
-	res, err := core.G_LOGDB.IteratorByRange(dbName, startstr, endstr)
+	res, err := R.GetLogDB().IteratorByRange(dbName, startstr, endstr)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +235,7 @@ func (l LocalLog2) SearchRecordByField(tableName string, primaryID string, start
 func (l LocalLog2) SearchRecordWithCondition(tableName string, primary []string, condition map[string]string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
 	dbName := tableName + "_log.db" // 一般都是同一个数据表的数据
 	startstr, endstr := l.GetTimeRange(strings.Join(primary, ",")+"=", start, end)
-	res, err := core.G_LOGDB.IteratorByRange(dbName, startstr, endstr)
+	res, err := R.GetLogDB().IteratorByRange(dbName, startstr, endstr)
 	if err != nil {
 		return nil, err
 	}

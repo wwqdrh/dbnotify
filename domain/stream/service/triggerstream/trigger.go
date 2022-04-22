@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/wwqdrh/datamanager/core"
 	"github.com/wwqdrh/datamanager/domain/stream/entity"
 	"github.com/wwqdrh/datamanager/domain/stream/repository"
 	"github.com/wwqdrh/datamanager/domain/stream/vo"
@@ -12,13 +11,13 @@ import (
 
 // buildPolicy 为新表注册策略
 func buildPolicy(tableName string, min_log_num, outdate int, pol vo.TablePolicy) (*entity.Policy, error) {
-	primary, err := core.G_DATADB.GetPrimary(tableName)
+	primary, err := R.GetDB().GetPrimary(tableName)
 	if err != nil {
 		return nil, err
 	}
 	primaryFields := strings.Join(primary, ",")
 	fieldsStr := []string{}
-	allFields := core.G_StructHandler.GetFields(tableName)
+	allFields := R.GetFieldHandler().GetFields(tableName)
 	ignoreMapping := map[string]bool{}
 	for _, item := range pol.IgnoreFields {
 		ignoreMapping[item] = true
@@ -47,7 +46,7 @@ func buildPolicy(tableName string, min_log_num, outdate int, pol vo.TablePolicy)
 	}
 
 	if err := repository.PolicyRepo.CreateNoExist(
-		core.G_DATADB.DB, policy,
+		R.GetDB().DB, policy,
 		map[string]interface{}{"table_name": tableName},
 	); err != nil {
 		return nil, err
@@ -61,7 +60,7 @@ func buildTrigger(tableName, logTableName string) error {
 	funcName := tableName + "_auto_log_recored()"
 	triggerName := tableName + "_auto_log_trigger"
 
-	if err := core.G_DATADB.CreateTrigger(fmt.Sprintf(`
+	if err := R.GetDB().CreateTrigger(fmt.Sprintf(`
 		create or replace FUNCTION %s RETURNS trigger
 		LANGUAGE plpgsql
 	    AS $$
@@ -98,7 +97,7 @@ func buildTrigger(tableName, logTableName string) error {
 	}
 
 	// 记录表结构变更
-	if err := core.G_DATADB.CreateEventTrigger(fmt.Sprintf(`
+	if err := R.GetDB().CreateEventTrigger(fmt.Sprintf(`
 	CREATE EXTENSION IF NOT EXISTS hstore;
 	CREATE OR REPLACE FUNCTION ddl_end_log_function()     
 	  RETURNS event_trigger                    
@@ -122,7 +121,7 @@ func buildTrigger(tableName, logTableName string) error {
 		return err
 	}
 
-	if err := core.G_DATADB.CreateEventTrigger(fmt.Sprintf(`
+	if err := R.GetDB().CreateEventTrigger(fmt.Sprintf(`
 	CREATE EXTENSION IF NOT EXISTS hstore;
 	CREATE OR REPLACE FUNCTION ddl_drop_log_function()     
 	RETURNS event_trigger                    

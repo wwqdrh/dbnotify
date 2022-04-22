@@ -4,16 +4,18 @@ import (
 	"errors"
 	"time"
 
-	"github.com/wwqdrh/datamanager/core"
 	stream_entity "github.com/wwqdrh/datamanager/domain/stream/entity"
 	stream_service "github.com/wwqdrh/datamanager/domain/stream/service/fulltrigger"
 	"github.com/wwqdrh/datamanager/domain/stream/vo"
 	"github.com/wwqdrh/datamanager/internal/structhandler"
+	"github.com/wwqdrh/datamanager/runtime"
 )
 
 ////////////////////
 // 基础信息
 ////////////////////
+
+var R = runtime.Runtime
 
 type MetaService struct {
 }
@@ -42,7 +44,7 @@ func (s *MetaService) Register(table interface{}, min_log_num, outdate int, fiel
 }
 
 func (s *MetaService) ListTable2() []*structhandler.Table {
-	result := core.G_StructHandler.GetTables()
+	result := []*structhandler.Table{}
 
 	tableMapping := map[string]*structhandler.Table{}
 	for _, item := range result {
