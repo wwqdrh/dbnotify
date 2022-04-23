@@ -175,7 +175,8 @@ func (l LocalLog2) GetTimeRange(key string, start, end *time.Time) (string, stri
 }
 
 // 获取整体记录信息
-func (l LocalLog2) SearchAllRecord(tableName string, primaryFields []string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+func (l LocalLog2) SearchAllRecord(db *driver.LevelDBDriver, tableName string, primaryFields []string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+	logdb = db
 	primaryStr := strings.Join(primaryFields, ",") + "="
 	dbName := tableName + "_log.db" // 一般都是同一个数据表的数据
 	startstr, endstr := l.GetTimeRange(primaryStr, start, end)
@@ -202,7 +203,9 @@ func (l LocalLog2) SearchAllRecord(tableName string, primaryFields []string, sta
 }
 
 // SearchRecordByField 获取具体记录值
-func (l LocalLog2) SearchRecordByField(tableName string, primaryID string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+func (l LocalLog2) SearchRecordByField(db *driver.LevelDBDriver, tableName string, primaryID string, start, end *time.Time, page, pageSize int) ([]map[string]interface{}, error) {
+	logdb = db
+
 	// primaryStr := strings.Join(primaryFields, ",") + "="
 	dbName := tableName + "_log.db" // 一般都是同一个数据表的数据
 	startstr, endstr := l.GetTimeRange(primaryID, start, end)

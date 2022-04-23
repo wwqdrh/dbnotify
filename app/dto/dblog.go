@@ -25,10 +25,11 @@ type ListHistoryAllReq struct {
 
 // RegisterTableReq 注册表
 type RegisterTableReq struct {
-	TableName   string   `json:"table_name" binding:"required"`
-	SenseFields []string `json:"sense_fields" binding:"required"`
-	MinLogNum   int      `json:"min_log_num" binding:"required"`
-	Outdate     int      `json:"out_date" binding:"required"`
+	TableName    string   `json:"table_name" binding:"required"`
+	SenseFields  []string `json:"sense_fields" binding:"required"`
+	MinLogNum    int      `json:"min_log_num" binding:"required"`
+	Outdate      int      `json:"out_date" binding:"required"`
+	IgnoreFields []string `json:"ignore_fields"`
 }
 
 type UnRegisterTableReq struct {

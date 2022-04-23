@@ -5,10 +5,13 @@ import (
 	"time"
 
 	"github.com/wwqdrh/datamanager/app/dto"
-	"github.com/wwqdrh/datamanager/app/service"
+	"github.com/wwqdrh/datamanager/internal/pgwatcher/base"
+	"github.com/wwqdrh/datamanager/runtime"
 
 	"github.com/ohko/hst"
 )
+
+var R = runtime.Runtime
 
 type (
 	Bdatalog struct{}
@@ -33,7 +36,7 @@ type (
 func (bdl *Bdatalog) ListTable(c *hst.Context) {
 	checkMethodGet(c)
 
-	c.JSON2(http.StatusOK, 0, new(service.MetaService).ListTable2())
+	c.JSON2(http.StatusOK, 0, runtime.Runtime.GetWatcher().GetAllPolicy())
 }
 
 func (bdl *Bdatalog) RegisterTable(c *hst.Context) {
@@ -47,12 +50,16 @@ func (bdl *Bdatalog) RegisterTable(c *hst.Context) {
 		c.JSON2(http.StatusOK, -1, "table_name不能为空")
 	}
 
-	if err = new(service.MetaService).Register(request.TableName, request.MinLogNum, request.Outdate, request.SenseFields, nil); err != nil {
-		c.JSON2(http.StatusOK, 1, err.Error())
+	if err := runtime.Runtime.GetWatcher().Register(&base.TablePolicy{
+		Table:        request.TableName,
+		MinLogNum:    request.MinLogNum,
+		Outdate:      request.Outdate,
+		SenseFields:  request.SenseFields,
+		IgnoreFields: request.IgnoreFields}); err != nil {
+		c.JSON2(http.StatusOK, 1, "注册失败")
 	} else {
 		c.JSON2(http.StatusOK, 0, "注册成功")
 	}
-
 }
 
 func (bdl *Bdatalog) UnregisterTable(c *hst.Context) {
@@ -66,7 +73,7 @@ func (bdl *Bdatalog) UnregisterTable(c *hst.Context) {
 	if request.TableName == "" {
 		c.JSON2(http.StatusOK, -1, "table_name不能为空")
 	}
-	if err = new(service.MetaService).UnRegister(request.TableName); err != nil {
+	if err = runtime.Runtime.GetWatcher().UnRegister(request.TableName); err != nil {
 		c.JSON2(http.StatusOK, 1, err.Error())
 	} else {
 		c.JSON2(http.StatusOK, 0, "取消监听成功")
@@ -89,7 +96,7 @@ func (bdl *Bdatalog) ListTableField(c *hst.Context) {
 		c.JSON2(http.StatusOK, 1, err.Error())
 	}
 
-	c.JSON2(http.StatusOK, 0, new(service.MetaService).ListTableField(request.TableName))
+	c.JSON2(http.StatusOK, 0, runtime.Runtime.GetFieldHandler().GetFields(request.TableName))
 }
 
 type (
@@ -129,12 +136,17 @@ func (bdl *Bdatalog) ListHistoryByName(c *hst.Context) {
 		t := time.Unix(request.EndTime/1000, 0)
 		end = &t
 	}
-	logs, err := new(service.MetaService).ListTableLog(request.TableName, request.RecordID, start, end, request.Page, request.PageSize)
-	if err != nil {
-		c.JSON2(http.StatusBadRequest, 1, err.Error())
+
+	if !R.GetWatcher().IsRegister(request.TableName) {
+		c.JSON2(http.StatusOK, 1, request.TableName+"未进行监听")
+		return
 	}
 
-	c.JSON2(http.StatusOK, 0, logs)
+	if logs, err := R.GetLogSave().GetLogger(request.TableName, request.RecordID, start, end, request.Page, request.PageSize); err != nil {
+		c.JSON2(http.StatusBadRequest, 1, err.Error())
+	} else {
+		c.JSON2(http.StatusOK, 0, logs)
+	}
 }
 
 func (bdl *Bdatalog) ListHistoryAll(c *hst.Context) {
@@ -159,12 +171,16 @@ func (bdl *Bdatalog) ListHistoryAll(c *hst.Context) {
 		end = &t
 	}
 
-	logs, err := new(service.MetaService).ListTableAllLog(request.TableName, start, end, request.Page, request.PageSize)
-	if err != nil {
-		c.JSON2(http.StatusBadRequest, 1, err.Error())
+	if !R.GetWatcher().IsRegister(request.TableName) {
+		c.JSON2(http.StatusOK, 1, request.TableName+"未进行监听")
+		return
 	}
 
-	c.JSON2(http.StatusOK, 0, logs)
+	if logs, err := R.GetLogSave().GetAllLog(request.TableName, R.GetWatcher().GetSenseFields(request.TableName), start, end, request.Page, request.PageSize); err != nil {
+		c.JSON2(http.StatusBadRequest, 1, err.Error())
+	} else {
+		c.JSON2(http.StatusOK, 0, logs)
+	}
 }
 
 // {name}
@@ -185,7 +201,7 @@ func (bdl *Bdatalog) ModifyTablePolicy(c *hst.Context) {
 		c.JSON2(http.StatusBadRequest, 1, err.Error())
 	}
 
-	if err := new(service.MetaService).ModifyPolicy(request.TableName, map[string]interface{}{
+	if err := R.GetWatcher().ModifyPolicy(request.TableName, map[string]interface{}{
 		"fields":      request.Fields,
 		"out_date":    request.Outdate,
 		"min_log_num": request.MinLogNum,

@@ -3,6 +3,7 @@ package policytable
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,10 +15,11 @@ import (
 type PgwatcherTable struct {
 	DB           *driver.PostgresDriver
 	AllPolicy    *sync.Map
-	Outdate      int    // 保存的记录时间
-	MinLogNum    int    // 最少保留的日志数
-	TempLogTable string // 临时日志名字
-	PerReadNum   int    // 一次读取多少条
+	senseFields  map[string][]string // TODO 各个表监听字段的缓存
+	Outdate      int                 // 保存的记录时间
+	MinLogNum    int                 // 最少保留的日志数
+	TempLogTable string              // 临时日志名字
+	PerReadNum   int                 // 一次读取多少条
 	Handler      base.IStructHandler
 
 	Readch *datautil.Queue
@@ -110,6 +112,22 @@ func (p *PgwatcherTable) Register(policy *base.TablePolicy) error {
 
 	}
 	return nil
+}
+
+func (p *PgwatcherTable) UnRegister(tableName string) error {
+	if err := new(Policy).DeleteByTableName(p.DB.DB, tableName); err != nil {
+		return errors.New("删除记录失败")
+	}
+	if err := p.DB.DeleteTrigger(tableName + "_auto_log_trigger"); err != nil {
+		return errors.New("删除触发器失败")
+	}
+	p.AllPolicy.Delete(tableName)
+	return nil
+}
+
+func (p *PgwatcherTable) IsRegister(tableName string) bool {
+	_, ok := p.AllPolicy.Load(tableName)
+	return ok
 }
 
 // 为表创建触发器
@@ -210,6 +228,28 @@ func (p *PgwatcherTable) deleteTrigger(tableName string) error {
 	return nil
 }
 
+func (p *PgwatcherTable) GetAllPolicy() []*base.Table {
+	result := []*base.Table{}
+	p.AllPolicy.Range(func(key, value interface{}) bool {
+		item := value.(*Policy)
+		result = append(result, &base.Table{
+			TableID:   item.TableName,
+			TableName: item.TableName,
+			IsListen:  true,
+		})
+		return true
+	})
+	return result
+}
+
+func (p *PgwatcherTable) GetSenseFields(tableName string) []string {
+	if val, ok := p.AllPolicy.Load(tableName); !ok {
+		return []string{}
+	} else {
+		return strings.Split(val.(*Policy).Fields, ",")
+	}
+}
+
 // 所有的表 包括动态创建的表
 func (p *PgwatcherTable) ListenAll() chan interface{} {
 	go func() {
@@ -261,4 +301,72 @@ func (p *PgwatcherTable) readLog(tableName string, id uint64, num int) ([]*LogTa
 // 以table粒度进行监听
 func (p *PgwatcherTable) ListenTable(tableName string) chan interface{} {
 	panic("not implemented") // TODO: Implement
+}
+
+////////////////////
+// 修改表策略
+////////////////////
+
+func (s *PgwatcherTable) ModifyPolicy(tableName string, args map[string]interface{}) error {
+	var policy *Policy
+	if val, ok := s.AllPolicy.Load(tableName); !ok {
+		return errors.New("表未注册")
+	} else {
+		policy = val.(*Policy)
+	}
+
+	if val, ok := args["out_date"].(int); ok && val != 0 {
+		policy.Outdate = val
+	}
+	if val, ok := args["fields"].([]string); ok && val != nil {
+		policy.Fields = strings.Join(val, ",")
+	}
+	if val, ok := args["min_log_num"].(int); ok && val != 0 {
+		policy.MinLogNum = val
+	}
+
+	if err := s.DB.DB.Save(policy).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *PgwatcherTable) ModifyOutdate(tableName string, outdate int) error {
+	var policy *Policy
+	if val, ok := s.AllPolicy.Load(tableName); !ok {
+		return errors.New("表未注册")
+	} else {
+		policy = val.(*Policy)
+	}
+	if policy.Outdate == outdate {
+		return nil
+	}
+
+	policy.Outdate = outdate
+	if err := s.DB.DB.Save(policy).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *PgwatcherTable) ModifyField(tableName string, fields []string) error {
+	var policy *Policy
+	if val, ok := s.AllPolicy.Load(tableName); !ok {
+		return errors.New("表未注册")
+	} else {
+		policy = val.(*Policy)
+	}
+	policy.Fields = strings.Join(fields, ",")
+	return s.DB.DB.Save(policy).Error
+}
+
+func (s *PgwatcherTable) ModifyMinLogNum(tableName string, minLogNum int) error {
+	var policy *Policy
+	if val, ok := s.AllPolicy.Load(tableName); !ok {
+		return errors.New("表未注册")
+	} else {
+		policy = val.(*Policy)
+	}
+	policy.MinLogNum = minLogNum
+	return s.DB.DB.Save(policy).Error
 }

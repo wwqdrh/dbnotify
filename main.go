@@ -131,7 +131,7 @@ func (d *dataManager) Start(db *gorm.DB, ctx context.Context) error {
 	}
 
 	if err := R.SetLogSave(func() (logsave.ILogSave, error) {
-		return logsave.NewLogSave(logsave.Leveldb, R.GetLogDB(), R.GetBackQueue()), nil
+		return logsave.NewLogSave(logsave.Leveldb, R.GetLogDB(), R.GetBackQueue(), R.GetFieldHandler().GetTableName, R.GetFieldHandler().GetFieldName), nil
 	}); err != nil {
 		return err
 	}

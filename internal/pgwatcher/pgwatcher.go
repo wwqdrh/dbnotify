@@ -19,8 +19,17 @@ type IWatcher interface {
 	// 初始化
 	Initail() error
 
+	GetAllPolicy() []*base.Table
+	GetSenseFields(string) []string
+	ModifyMinLogNum(tableName string, minLogNum int) error
+	ModifyField(tableName string, fields []string) error
+	ModifyOutdate(tableName string, outdate int) error
+	ModifyPolicy(tableName string, args map[string]interface{}) error
+
 	// 使用不同的策略进行注册
 	Register(policy *base.TablePolicy) error
+	UnRegister(tableName string) error
+	IsRegister(tableName string) bool
 
 	// 所有的表 包括动态创建的表
 	ListenAll() chan interface{}
