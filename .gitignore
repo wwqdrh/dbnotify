@@ -2,6 +2,7 @@
 version.db
 version
 DOCS.md
+TODO.md
 
 .vscode
 __debug_bin

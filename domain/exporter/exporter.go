@@ -1,5 +1,0 @@
-package exporter
-
-func Register() {
-
-}
