@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/wwqdrh/datamanager"
+	pgwatcher_base "github.com/wwqdrh/datamanager/internal/pgwatcher/base"
 	"github.com/wwqdrh/datamanager/runtime"
 
 	"time"
@@ -73,7 +74,7 @@ func main() {
 		rc.ReadPolicy = "notify"
 		rc.WritePolicy = "leveldb"
 		rc.DB = system_model.DB()
-		rc.RegisterTable = []runtime.TablePolicy{
+		rc.RegisterTable = []pgwatcher_base.TablePolicy{
 			{
 				Table:     Company{},
 				RelaField: "id",
@@ -85,7 +86,7 @@ func main() {
 			},
 		}
 	})
-	datamanager.Start(nil, ctx)
+	datamanager.Datamanager.Start(nil, ctx)
 	err := h.ListenHTTP(":8090")
 	log.Println("exit:", err)
 }
