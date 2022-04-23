@@ -8,7 +8,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/ohko/hst"
 	"github.com/wwqdrh/datamanager/app"
 	"github.com/wwqdrh/datamanager/internal/datautil"
 	"github.com/wwqdrh/datamanager/internal/driver"
@@ -27,7 +26,7 @@ type dataManager struct {
 
 // 初始化配置 但是不启动后台的读取与写入数据变更策略
 // 可能会传入静态的表
-func Initial(handler *hst.HST, opts ...runtime.RuntimeConfigOpt) *hst.HST {
+func Initial(handler app.HTTPHandler, opts ...runtime.RuntimeConfigOpt) {
 	R.SetConfig(func() (*runtime.RuntimeConfig, error) {
 		conf := &runtime.RuntimeConfig{}
 		for _, opt := range opts {
@@ -61,7 +60,7 @@ func Initial(handler *hst.HST, opts ...runtime.RuntimeConfigOpt) *hst.HST {
 		return conf, nil
 	})
 
-	return app.RegisterApi(handler)
+	app.Register(handler)
 }
 
 // 启动后台服务，处理数据变更

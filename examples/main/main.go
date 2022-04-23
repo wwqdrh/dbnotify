@@ -67,8 +67,8 @@ func main() {
 
 	h := hst.New(nil)
 	Start(h)
-
-	datamanager.Initial(h, func(rc *runtime.RuntimeConfig) {
+	adapter := NewHSTAdapter(h)
+	datamanager.Initial(adapter, func(rc *runtime.RuntimeConfig) {
 		rc.LogDataPath = "./version"
 		rc.MinLogNum = 10
 		rc.ReadPolicy = "notify"
