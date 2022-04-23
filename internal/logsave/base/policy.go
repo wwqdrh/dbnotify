@@ -1,6 +1,10 @@
 package base
 
-import "time"
+import (
+	"time"
+
+	"github.com/wwqdrh/datamanager/internal/driver"
+)
 
 type Policy struct {
 	TableName     string // 数据表的名字
@@ -14,7 +18,7 @@ type Policy struct {
 
 type LogTable struct {
 	TableName string
-	Log       string
+	Log       driver.JSON
 	Action    string
 	Time      time.Time
 }
