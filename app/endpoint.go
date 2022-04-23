@@ -1,8 +1,6 @@
 package app
 
 import (
-	"encoding/json"
-	"io"
 	"net/http"
 	"time"
 
@@ -51,19 +49,6 @@ func Register(handler HTTPHandler) error {
 }
 
 ////////////////////
-// help func
-////////////////////
-
-// 解析json格式请求数据
-func parseJSONBody(body io.ReadCloser, res interface{}) error {
-	e := json.NewDecoder(body).Decode(res)
-	if e != nil && e != io.EOF {
-		return e
-	}
-	return nil
-}
-
-////////////////////
 // endpoint
 ////////////////////
 
@@ -100,8 +85,13 @@ func (bdl *Bdatalog) ListTable(ctx interface{}) {
 
 func (bdl *Bdatalog) RegisterTable(ctx interface{}) {
 	r, w, err := bdl.httpHandler.Context(ctx)
+	if err != nil {
+		dto.JSON2(w, 500, 1, "未知错误")
+		return
+	}
+
 	var request dto.RegisterTableReq
-	err = parseJSONBody(r.Body, &request)
+	err = dto.ParseJSONBody(r.Body, &request)
 	if err != nil || request.TableName == "" {
 		dto.JSON2(w, 400, 1, "参数错误")
 		return
@@ -121,8 +111,13 @@ func (bdl *Bdatalog) RegisterTable(ctx interface{}) {
 
 func (bdl *Bdatalog) UnregisterTable(ctx interface{}) {
 	r, w, err := bdl.httpHandler.Context(ctx)
+	if err != nil {
+		dto.JSON2(w, 500, 1, "未知错误")
+		return
+	}
+
 	var request dto.UnRegisterTableReq
-	err = parseJSONBody(r.Body, &request)
+	err = dto.ParseJSONBody(r.Body, &request)
 	if err != nil || request.TableName == "" {
 		dto.JSON2(w, 400, 1, "参数错误")
 		return
@@ -145,8 +140,13 @@ func (bdl *Bdatalog) UnregisterTable(ctx interface{}) {
 // @Success 200 {object} ListTableResponse "ok"
 func (bdl *Bdatalog) ListTableField(ctx interface{}) {
 	r, w, err := bdl.httpHandler.Context(ctx)
+	if err != nil {
+		dto.JSON2(w, 500, 1, "未知错误")
+		return
+	}
+
 	var request dto.ListTableFieldReq
-	err = parseJSONBody(r.Body, &request)
+	err = dto.ParseJSONBody(r.Body, &request)
 	if err != nil || request.TableName == "" {
 		dto.JSON2(w, 400, 1, "参数错误")
 		return
@@ -173,8 +173,13 @@ type (
 // @Router /table/history [get]
 func (bdl *Bdatalog) ListHistoryByName(ctx interface{}) {
 	r, w, err := bdl.httpHandler.Context(ctx)
+	if err != nil {
+		dto.JSON2(w, 500, 1, "未知错误")
+		return
+	}
+
 	var request dto.ListHistoryByNameReq
-	err = parseJSONBody(r.Body, &request)
+	err = dto.ParseJSONBody(r.Body, &request)
 	if err != nil {
 		dto.JSON2(w, 400, 1, "参数错误")
 		return
@@ -212,8 +217,13 @@ func (bdl *Bdatalog) ListHistoryByName(ctx interface{}) {
 
 func (bdl *Bdatalog) ListHistoryAll(ctx interface{}) {
 	r, w, err := bdl.httpHandler.Context(ctx)
+	if err != nil {
+		dto.JSON2(w, 500, 1, "未知错误")
+		return
+	}
+
 	var request dto.ListHistoryAllReq
-	err = parseJSONBody(r.Body, &request)
+	err = dto.ParseJSONBody(r.Body, &request)
 	if err != nil {
 		dto.JSON2(w, 400, 1, "参数错误")
 		return
@@ -260,8 +270,13 @@ func (bdl *Bdatalog) ListHistoryAll(ctx interface{}) {
 // @Router /api/login [post]
 func (bdl *Bdatalog) ModifyTablePolicy(ctx interface{}) {
 	r, w, err := bdl.httpHandler.Context(ctx)
+	if err != nil {
+		dto.JSON2(w, 500, 1, "未知错误")
+		return
+	}
+
 	var request dto.ModifyTablePolicyReq
-	err = parseJSONBody(r.Body, &request)
+	err = dto.ParseJSONBody(r.Body, &request)
 	if err != nil {
 		dto.JSON2(w, 400, 1, "参数错误")
 		return
