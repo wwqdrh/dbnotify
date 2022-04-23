@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/wwqdrh/datamanager/app"
 	"github.com/wwqdrh/datamanager/internal/datautil"
 	"github.com/wwqdrh/datamanager/internal/driver"
+	"github.com/wwqdrh/datamanager/internal/logsave"
+	"github.com/wwqdrh/datamanager/internal/pgwatcher"
 	"github.com/wwqdrh/datamanager/runtime"
 )
 
@@ -80,6 +83,13 @@ func (d *dataManager) Start(db *gorm.DB, ctx context.Context) error {
 		return err
 	}
 
+	if err := R.SetFieldHandler(func() (runtime.IStructHandler, error) {
+		DefaultHandler.db = R.GetDB()
+		return DefaultHandler, nil
+	}); err != nil {
+		return err
+	}
+
 	// leveldb
 	if err := R.SetLogDB(func() (*driver.LevelDBDriver, error) {
 		logPath := R.GetConfig().LogDataPath
@@ -102,6 +112,30 @@ func (d *dataManager) Start(db *gorm.DB, ctx context.Context) error {
 		return err
 	}
 
+	// 监听者
+	if err := R.SetWatcher(func() (pgwatcher.IWatcher, error) {
+		// return pgwatcher.NewWatcherPolicy(pgwatcher.Trigger), nil
+		conf := R.GetConfig()
+		w := pgwatcher.NewWatcherPolicy(
+			pgwatcher.Table,
+			R.GetDB(), R.GetFieldHandler(),
+			conf.Outdate, conf.MinLogNum, conf.TempLogTable, conf.PerReadNum,
+			R.GetBackQueue(),
+		)
+		if err := w.Initail(); err != nil {
+			return nil, err
+		}
+		return w, nil
+	}); err != nil {
+		return err
+	}
+
+	if err := R.SetLogSave(func() (logsave.ILogSave, error) {
+		return logsave.NewLogSave(logsave.Leveldb, R.GetBackQueue()), nil
+	}); err != nil {
+		return err
+	}
+
 	// 注册静态表
 	for _, item := range R.GetConfig().RegisterTable {
 		R.GetWatcher().Register(&item)
@@ -110,15 +144,20 @@ func (d *dataManager) Start(db *gorm.DB, ctx context.Context) error {
 	// 一个协程读一个协程写
 	d.ctx, d.cancel = context.WithCancel(ctx)
 	go func() {
-		ch := R.GetWatcher().ListenAll()
+		R.GetWatcher().ListenAll()
 		saver := R.GetLogSave()
+
 		for {
-			select {
-			case item := <-ch:
-				saver.Write(item)
-			case <-ctx.Done():
-				return
+			if task := R.GetBackQueue().GetTask(); task != nil {
+				payload := task.PayLoad.(map[string]interface{}) // data, policy
+				if saver.Write(payload) != nil {
+					task.SetResult(false)
+				} else {
+					task.SetResult(true)
+				}
 			}
+
+			time.Sleep(10 * time.Second)
 		}
 	}()
 

@@ -1,25 +1,26 @@
 package pgwatcher
 
-type TablePolicy struct {
-	Table        interface{}
-	MinLogNum    int
-	Outdate      int
-	RelaField    string
-	Relations    string
-	SenseFields  []string
-	IgnoreFields []string
-}
+import (
+	"github.com/wwqdrh/datamanager/internal/datautil"
+	"github.com/wwqdrh/datamanager/internal/driver"
+	"github.com/wwqdrh/datamanager/internal/pgwatcher/base"
+	"github.com/wwqdrh/datamanager/internal/pgwatcher/policytable"
+	"github.com/wwqdrh/datamanager/internal/pgwatcher/policytrigger"
+)
 
 type watcherPolicy int
 
 const (
-	table watcherPolicy = iota
-	trigger
+	Table watcherPolicy = iota
+	Trigger
 )
 
 type IWatcher interface {
+	// 初始化
+	Initail() error
+
 	// 使用不同的策略进行注册
-	Register(policy *TablePolicy)
+	Register(policy *base.TablePolicy) error
 
 	// 所有的表 包括动态创建的表
 	ListenAll() chan interface{}
@@ -28,12 +29,29 @@ type IWatcher interface {
 	ListenTable(tableName string) chan interface{}
 } // 不同的策略
 
-func NewWatcherPolicy(p watcherPolicy) IWatcher {
+func NewWatcherPolicy(
+	p watcherPolicy,
+	db *driver.PostgresDriver,
+	handler base.IStructHandler,
+	Outdate int,
+	MinLogNum int,
+	TempLogTable string,
+	PerReadNum int,
+	queue *datautil.Queue,
+) IWatcher {
 	switch p {
-	case table:
-		return nil
-	case trigger:
-		return nil
+	case Table:
+		return &policytable.PgwatcherTable{
+			DB:           db,
+			Outdate:      Outdate,
+			MinLogNum:    MinLogNum,
+			TempLogTable: TempLogTable,
+			PerReadNum:   PerReadNum,
+			Handler:      handler,
+			Readch:       queue,
+		}
+	case Trigger:
+		return &policytrigger.PgWatcherNotify{DB: db}
 	default:
 		return nil
 	}

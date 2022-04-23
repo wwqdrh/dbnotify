@@ -43,6 +43,7 @@ type runtime struct {
 	config  *RuntimeConfig
 	watcher pgwatcher.IWatcher
 	saver   logsave.ILogSave
+	handler IStructHandler
 }
 
 func (r *runtime) GetDB() *driver.PostgresDriver {
@@ -86,11 +87,16 @@ func (r *runtime) SetBackQueue(fn func() (*datautil.Queue, error)) error {
 
 // 表字段的转换
 func (r *runtime) GetFieldHandler() IStructHandler {
-	panic("not implemented") // TODO: Implement
+	return r.handler
 }
 
-func (r *runtime) SetFieldHandler(_ func() (IStructHandler, error)) error {
-	panic("not implemented") // TODO: Implement
+func (r *runtime) SetFieldHandler(fn func() (IStructHandler, error)) error {
+	c, err := fn()
+	if err != nil {
+		return err
+	}
+	r.handler = c
+	return nil
 }
 
 // 变量

@@ -1,28 +1,14 @@
 package runtime
 
 import (
-	"github.com/wwqdrh/datamanager/internal/pgwatcher"
+	"github.com/wwqdrh/datamanager/internal/pgwatcher/base"
 	"gorm.io/gorm"
 )
 
 type (
-	IStructHandler interface {
-		GetTables() []*Table
-		GetFields(string) []*Fields
-		GetFieldName(string, string) string // 通过表名，字段id 获取字段名
-		GetTableName(string) string         // 通过表id获取表名字
-	}
-
-	Table struct {
-		TableID   string `json:"table_id"`
-		TableName string `json:"table_name"`
-		IsListen  bool   `json:"is_listen"`
-	}
-
-	Fields struct {
-		FieldID   string `json:"field_id"`
-		FieldName string `json:"field_name"`
-	}
+	IStructHandler = base.IStructHandler
+	Table          = base.Table
+	Fields         = base.Fields
 )
 
 type TablePolicy struct {
@@ -36,16 +22,16 @@ type TablePolicy struct {
 }
 
 type RuntimeConfig struct {
-	Outdate       int                     // 保存的记录时间
-	MinLogNum     int                     // 最少保留的日志数
-	TempLogTable  string                  // 临时日志名字
-	PerReadNum    int                     // 一次读取多少条
-	ReadPolicy    string                  // 读取的策略
-	WritePolicy   string                  // 保存的策略
-	LogDataPath   string                  // 保存的存储记录位置
-	DB            *gorm.DB                // 可以外部调用者自己传递
-	Handler       IStructHandler          // 表字段的映射
-	RegisterTable []pgwatcher.TablePolicy // 初始化注册的静态监听的表
+	Outdate       int                // 保存的记录时间
+	MinLogNum     int                // 最少保留的日志数
+	TempLogTable  string             // 临时日志名字
+	PerReadNum    int                // 一次读取多少条
+	ReadPolicy    string             // 读取的策略
+	WritePolicy   string             // 保存的策略
+	LogDataPath   string             // 保存的存储记录位置
+	DB            *gorm.DB           // 可以外部调用者自己传递
+	Handler       IStructHandler     // 表字段的映射
+	RegisterTable []base.TablePolicy // 初始化注册的静态监听的表
 }
 
 type RuntimeConfigOpt = func(*RuntimeConfig)
