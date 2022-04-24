@@ -86,7 +86,7 @@ func main() {
 			},
 		}
 	})
-	datamanager.Datamanager.Start(nil, ctx)
+	datamanager.Start(nil, ctx)
 	err := h.ListenHTTP(":8090")
 	log.Println("exit:", err)
 }

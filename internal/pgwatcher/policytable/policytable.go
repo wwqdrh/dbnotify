@@ -74,7 +74,7 @@ func (p *PgwatcherTable) Initail() error {
 		return err
 	}
 	new(Policy).Migrate(p.DB.DB)
-	new(LogTable).Migrate(p.DB.DB)
+	p.DB.DB.Table(p.TempLogTable).AutoMigrate(LogTable{})
 
 	// 读取现有的策略
 	if p.AllPolicy == nil {
@@ -90,10 +90,9 @@ func (p *PgwatcherTable) Initail() error {
 // 记录表的日志策略
 func (p *PgwatcherTable) Register(policy *base.TablePolicy) error {
 	table := policy.Table
-	// if !s.registerCheck(table) { // 检查table是否合法
-	// 	return fmt.Errorf("%v不合法", table)
-	// }
-
+	if err := p.DB.DB.AutoMigrate(table); err != nil {
+		return fmt.Errorf("数据表初始化失败: %w", err)
+	} // 注册表结构
 	tableName := p.DB.GetTableName(table)
 	if tableName == "" {
 		return errors.New("表名不能为空")

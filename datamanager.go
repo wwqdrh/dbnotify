@@ -65,8 +65,11 @@ func Initial(handler app.HTTPHandler, opts ...runtime.RuntimeConfigOpt) {
 
 // 启动后台服务，处理数据变更
 // 初始化Initialize传入的表 需要初始化触发器
-func (d *dataManager) Start(db *gorm.DB, ctx context.Context) error {
-	if d.ctx != nil {
+func Start(db *gorm.DB, ctx context.Context) error {
+	if Datamanager == nil {
+		return errors.New("还未初始化")
+	}
+	if Datamanager.ctx != nil {
 		return errors.New("已经启动过")
 	}
 	// 监听的数据库db
@@ -141,28 +144,36 @@ func (d *dataManager) Start(db *gorm.DB, ctx context.Context) error {
 	}
 
 	// 一个协程读一个协程写
-	d.ctx, d.cancel = context.WithCancel(ctx)
+	Datamanager.ctx, Datamanager.cancel = context.WithCancel(ctx)
 	go func() {
 		R.GetWatcher().ListenAll()
 		saver := R.GetLogSave()
-
 		for {
-			if task := R.GetBackQueue().GetTask(); task != nil {
-				payload := task.PayLoad.(map[string]interface{}) // data, policy
-				if saver.Write(payload) != nil {
-					task.SetResult(false)
-				} else {
-					task.SetResult(true)
+			select {
+			case <-Datamanager.ctx.Done():
+				return
+			default:
+				if task := R.GetBackQueue().GetTask(); task != nil {
+					payload := task.PayLoad.(map[string]interface{}) // data, policy
+					if saver.Write(payload) != nil {
+						task.SetResult(false)
+					} else {
+						task.SetResult(true)
+					}
+					time.Sleep(10 * time.Second)
 				}
 			}
 
-			time.Sleep(10 * time.Second)
 		}
 	}()
 
 	return nil
 }
 
-func (d *dataManager) Stop() {
-	d.cancel()
+func Stop() error {
+	if Datamanager == nil {
+		return errors.New("还未初始化")
+	}
+	Datamanager.cancel()
+	return nil
 }
