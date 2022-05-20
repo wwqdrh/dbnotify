@@ -4,6 +4,10 @@ import "time"
 
 type PostgresLog struct{}
 
+func NewPostgresLog(log string) *PostgresLog {
+	return &PostgresLog{}
+}
+
 // 获取日志记录类型 ddl dml
 func (l *PostgresLog) GetType() string {
 	return ""

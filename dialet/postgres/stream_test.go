@@ -1,4 +1,4 @@
-package pqstream
+package postgres
 
 import (
 	"context"
@@ -10,6 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/jsonpb"
+	google_protobuf "github.com/golang/protobuf/ptypes/struct"
+	ptypes_struct "github.com/golang/protobuf/ptypes/struct"
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -31,6 +35,190 @@ func init() {
 	}
 	if s := os.Getenv("PQSTREAM_TEST_DB_TMPL_URL"); s != "" {
 		testConnectionStringTemplate = s
+	}
+}
+
+func Test_generatePatch(t *testing.T) {
+	type args struct {
+		a *ptypes_struct.Struct
+		b *ptypes_struct.Struct
+	}
+	tests := []struct {
+		name     string
+		args     args
+		wantJSON string
+		wantErr  bool
+	}{
+		{"nils", args{nil, nil}, "{}", false},
+		{"empties", args{&ptypes_struct.Struct{}, &ptypes_struct.Struct{}}, "{}", false},
+		{"basic", args{&ptypes_struct.Struct{}, &ptypes_struct.Struct{
+			Fields: map[string]*ptypes_struct.Value{
+				"foo": {
+					Kind: &ptypes_struct.Value_StringValue{
+						StringValue: "bar",
+					},
+				},
+			},
+		}}, `{"foo":"bar"}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := generatePatch(tt.args.a, tt.args.b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("generatePatch() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			gotJSON, err := (&jsonpb.Marshaler{}).MarshalToString(got)
+			if err != nil {
+				t.Error(err)
+			}
+			if !cmp.Equal(gotJSON, tt.wantJSON) {
+				t.Errorf("generatePatch() = %v, want %v\n%s", gotJSON, tt.wantJSON, cmp.Diff(gotJSON, tt.wantJSON))
+			}
+		})
+	}
+}
+
+func TestServer_redactFields(t *testing.T) {
+
+	rfields := FieldRedactions{
+		"public": {"users": []string{
+			"password",
+			"email",
+		},
+		},
+	}
+
+	s, err := NewServer(testConnectionString, WithFieldRedactions(rfields))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	event := &RawEvent{
+		Schema: "public",
+		Table:  "users",
+		Payload: &google_protobuf.Struct{
+			Fields: map[string]*google_protobuf.Value{
+				"first_name": {
+					Kind: &google_protobuf.Value_StringValue{StringValue: "first_name"},
+				},
+				"last_name": {
+					Kind: &google_protobuf.Value_StringValue{StringValue: "last_name"},
+				},
+				"password": {
+					Kind: &google_protobuf.Value_StringValue{StringValue: "_insecure_"},
+				},
+				"email": {
+					Kind: &google_protobuf.Value_StringValue{StringValue: "someone@corp.com"},
+				},
+			},
+		},
+	}
+
+	type args struct {
+		redactions FieldRedactions
+		incoming   *RawEvent
+		expected   *RawEvent
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{"nil", args{redactions: rfields, incoming: nil}},
+		{"nil_payload", args{redactions: rfields, incoming: &RawEvent{}}},
+		{"nil_payload_matching", args{redactions: rfields, incoming: &RawEvent{
+			Schema: "public",
+			Table:  "users",
+		}}},
+		{"nil_payload_nonnil_previous", args{redactions: rfields, incoming: &RawEvent{
+			Schema: "public",
+			Table:  "users",
+			Previous: &google_protobuf.Struct{
+				Fields: map[string]*google_protobuf.Value{
+					"password": {
+						Kind: &google_protobuf.Value_StringValue{StringValue: "password"},
+					},
+				},
+			},
+		}}},
+		{
+			name: "found",
+			args: args{
+				redactions: rfields,
+				incoming:   event,
+				expected: &RawEvent{
+					Schema: "public",
+					Table:  "users",
+					Payload: &google_protobuf.Struct{
+						Fields: map[string]*google_protobuf.Value{
+							"first_name": {
+								Kind: &google_protobuf.Value_StringValue{StringValue: "first_name"},
+							},
+							"last_name": {
+								Kind: &google_protobuf.Value_StringValue{StringValue: "last_name"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "not_found",
+			args: args{
+				redactions: rfields,
+				incoming:   event,
+				expected:   event,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s.redactions = tt.args.redactions
+			s.redactFields(tt.args.incoming)
+
+			if got := tt.args.incoming; tt.args.expected != nil && !cmp.Equal(got, tt.args.expected) {
+				t.Errorf("s.redactFields()= %v, want %v", got, tt.args.expected)
+			}
+		})
+	}
+}
+
+func TestDecodeRedactions(t *testing.T) {
+	type args struct {
+		r string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    FieldRedactions
+		wantErr bool
+	}{
+		{
+			name: "basic",
+			args: args{r: `{"public":{"users":["first_name","last_name","email"]}}`},
+			want: FieldRedactions{
+				"public": {"users": []string{
+					"first_name",
+					"last_name",
+					"email",
+				},
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := DecodeRedactions(tt.args.r)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DecodeRedactions() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !cmp.Equal(got, tt.want) {
+				t.Errorf("DecodeRedactions() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -251,7 +439,7 @@ func TestServer_HandleEvents(t *testing.T) {
 		}
 		return testCase{caseName, func(t *testing.T, s *Stream) {
 			insert := fmt.Sprintf(testInsertTemplate, mkString(n, '.'))
-			s.logger.Debugln("inserting", n)
+			fmt.Printf("inseting %d \n", n)
 			if _, err := s.db.Exec(insert); err != nil {
 				t.Fatal(err)
 			}
@@ -286,7 +474,7 @@ func TestServer_HandleEvents(t *testing.T) {
 			defer cancel()
 			cs, cleanup := testDBConn(t, db, tt.name)
 			defer cleanup()
-			s, err := NewServer(cs, WithLogger(loggerFromT(t)))
+			s, err := NewServer(cs)
 			s.listenerPingInterval = time.Second // move into a helper?
 			if err != nil {
 				t.Fatal(err)
