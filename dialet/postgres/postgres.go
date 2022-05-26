@@ -9,7 +9,7 @@ SELECT table_name
    AND table_type='BASE TABLE'
 `
 
-	// 创建notify函数
+	// 创建dml notify函数
 	sqlTriggerFunction = `
 CREATE EXTENSION IF NOT EXISTS hstore;
 CREATE OR REPLACE FUNCTION pqstream_notify() RETURNS TRIGGER AS $$
@@ -40,16 +40,56 @@ CREATE OR REPLACE FUNCTION pqstream_notify() RETURNS TRIGGER AS $$
     END;
 $$ LANGUAGE plpgsql;
 `
+
+	// 创建ddl notify函数
+	sqlDDLTriggerFunction = `
+	CREATE EXTENSION IF NOT EXISTS hstore;
+	CREATE OR REPLACE FUNCTION ddl_end_log_function() RETURNS event_trigger AS $$  
+		DECLARE
+			rec hstore;  
+			notification json;
+		BEGIN   
+	  		select hstore(pg_stat_activity.*) into rec from pg_stat_activity where pid=pg_backend_pid();
+			notification = json_build_object(
+				'payload', json_build_object(
+					 'query', rec->'query'
+					)
+				);
+			PERFORM pg_notify('pqstream_notify', notification::text);
+	 	END;  
+	$$ LANGUAGE plpgsql;`
+
+	// insert into %s ("table_name", "log", "action", "time")
+	// values (SELECT
+	// 	now(),
+	// 	classid,
+	// 	objid,
+	// 	objsubid,
+	// 	command_tag,
+	// 	object_type,
+	// 	schema_name,
+	// 	object_identity,
+	// 	in_extension
+	// 	FROM pg_event_trigger_ddl_commands() left join select(rec,rec->'query',tg_tag,tg_event));
 	// 删除触发器
 	sqlRemoveTrigger = `
 DROP TRIGGER IF EXISTS pqstream_notify ON %s
 `
+
+	sqlDDLRemoteTrigger = `
+DROP TRIGGER IF EXISTS ddl_end_log_trigger
+	`
 
 	// 安装触发器
 	sqlInstallTrigger = `
 CREATE TRIGGER pqstream_notify
 AFTER INSERT OR UPDATE OR DELETE ON %s
     FOR EACH ROW EXECUTE PROCEDURE pqstream_notify();
+`
+	sqlDDLInstallTrigger = `
+CREATE EVENT TRIGGER ddl_end_log_trigger
+ON ddl_command_end when TAG IN ('CREATE TABLE', 'DROP TABLE', 'ALTER TABLE')
+EXECUTE PROCEDURE ddl_end_log_function();
 `
 
 	// 根据rowid获取数据
@@ -75,13 +115,27 @@ func NewPostgresDialet(dsn string) (*PostgresDialet, error) {
 	}, nil
 }
 
+func (p *PostgresDialet) Stream() *Stream {
+	return p.stream
+}
+
 // Initial
 func (p *PostgresDialet) Initial() error {
 	// p.stream.installTrigger()
+	if _, err := p.stream.db.Exec(sqlDDLTriggerFunction); err != nil {
+		return err
+	}
+	// enable ddl
+	if _, err := p.stream.db.Exec(sqlDDLInstallTrigger); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (p *PostgresDialet) Close() error {
+	if _, err := p.stream.db.Exec(sqlDDLRemoteTrigger); err != nil {
+		return err
+	}
 	return p.stream.Close()
 }
 
