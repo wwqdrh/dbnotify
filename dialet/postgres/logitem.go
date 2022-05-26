@@ -1,11 +1,26 @@
 package postgres
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
-type PostgresLog struct{}
+type PostgresLog struct {
+	Schema  string                 `json:"schema"`
+	Table   string                 `json:"table"`
+	Op      int                    `json:"op"`
+	Id      string                 `json:"id"`
+	Payload map[string]interface{} `json:"payload"`
+}
 
-func NewPostgresLog(log string) *PostgresLog {
-	return &PostgresLog{}
+// log unmarshal to struct
+// example: {"schema":"public","table":"notes","op":1,"id":"14","payload":{"created_at":null,"id":14,"name":"user1","note":"here is a sample note"}}
+func NewPostgresLog(log string) (*PostgresLog, error) {
+	var l *PostgresLog
+	if err := json.Unmarshal([]byte(log), &l); err != nil {
+		return nil, err
+	}
+	return l, nil
 }
 
 // 获取日志记录类型 ddl dml
@@ -24,6 +39,6 @@ func (l *PostgresLog) GetTime() time.Time {
 }
 
 // 获取具体的负载对象
-func (l *PostgresLog) GetPaylod() string {
-	return ""
+func (l *PostgresLog) GetPaylod() map[string]interface{} {
+	return l.Payload
 }

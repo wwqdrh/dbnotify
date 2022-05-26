@@ -179,6 +179,10 @@ func (s *Stream) Close() error {
 	return nil
 }
 
+func (s *Stream) DB() *sql.DB {
+	return s.db
+}
+
 // InstallTriggers sets up triggers to start observing changes for the set of tables in the database.
 func (s *Stream) InstallTriggers() error {
 	_, err := s.db.Exec(sqlTriggerFunction)
@@ -322,12 +326,12 @@ func (s *Stream) HandleEvents(ctx context.Context, q chan string) error {
 			return nil
 		case ev := <-events:
 			// TODO(tmc): separate case handling into method
-			fmt.Printf("event %v fallback lookup failed", ev)
+			// fmt.Printf("event %v fallback lookup failed", ev)
 			if err := s.handleEvent(ev, q); err != nil {
 				return err
 			}
 		case <-time.After(s.listenerPingInterval):
-			fmt.Println("interval " + s.listenerPingInterval.String() + "pinging")
+			// fmt.Println("interval " + s.listenerPingInterval.String() + "pinging")
 			if err := s.l.Ping(); err != nil {
 				return errors.Wrap(err, "Ping")
 			}

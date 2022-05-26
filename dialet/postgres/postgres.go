@@ -1,7 +1,5 @@
 package postgres
 
-import "gorm.io/gorm"
-
 var (
 	// 获取当前的所有数据表名
 	sqlQueryTables = `
@@ -13,6 +11,7 @@ SELECT table_name
 
 	// 创建notify函数
 	sqlTriggerFunction = `
+CREATE EXTENSION IF NOT EXISTS hstore;
 CREATE OR REPLACE FUNCTION pqstream_notify() RETURNS TRIGGER AS $$
     DECLARE 
         payload json;
@@ -24,6 +23,7 @@ CREATE OR REPLACE FUNCTION pqstream_notify() RETURNS TRIGGER AS $$
         ELSE
             payload = row_to_json(NEW);
         END IF;
+        
         IF (TG_OP = 'UPDATE') THEN
             previous = row_to_json(OLD);
         END IF;
@@ -35,28 +35,11 @@ CREATE OR REPLACE FUNCTION pqstream_notify() RETURNS TRIGGER AS $$
 						  'id', json_extract_path(payload, 'id')::text,
                           'payload', payload,
 						  'previous', previous);
-        IF (length(notification::text) >= 8000) THEN
-          notification = json_build_object(
-                          'schema', TG_TABLE_SCHEMA,
-                          'table', TG_TABLE_NAME,
-                          'op', TG_OP,
-						  'id', json_extract_path(payload, 'id')::text,
-						  'payload', payload);
-        END IF;
-        IF (length(notification::text) >= 8000) THEN
-          notification = json_build_object(
-                            'schema', TG_TABLE_SCHEMA,
-                            'table', TG_TABLE_NAME,
-                            'op', TG_OP,
-							'id', json_extract_path(payload, 'id')::text);
-        END IF;
-        
         PERFORM pg_notify('pqstream_notify', notification::text);
         RETURN NULL; 
     END;
 $$ LANGUAGE plpgsql;
 `
-
 	// 删除触发器
 	sqlRemoveTrigger = `
 DROP TRIGGER IF EXISTS pqstream_notify ON %s
@@ -76,18 +59,39 @@ AFTER INSERT OR UPDATE OR DELETE ON %s
 )
 
 type PostgresDialet struct {
-	db *gorm.DB
+	dsn    string
+	stream *Stream
 }
 
-func NewPostgresDialet(db *gorm.DB) *PostgresDialet {
-	return &PostgresDialet{
-		db: db,
+func NewPostgresDialet(dsn string) (*PostgresDialet, error) {
+	stream, err := NewServer(dsn)
+	if err != nil {
+		return nil, err
 	}
+
+	return &PostgresDialet{
+		dsn:    dsn,
+		stream: stream,
+	}, nil
 }
 
-// dialet初始化
+// Initial
 func (p *PostgresDialet) Initial() error {
+	// p.stream.installTrigger()
 	return nil
+}
+
+func (p *PostgresDialet) Close() error {
+	return p.stream.Close()
+}
+
+// Register add policy for table
+func (p *PostgresDialet) Register(table string) error {
+	return p.stream.installTrigger(table)
+}
+
+func (p *PostgresDialet) UnRegister(table string) error {
+	return p.stream.removeTrigger(table)
 }
 
 // 修改指定数据库数据表的日志存储策略
