@@ -3,6 +3,7 @@ version.db
 version
 DOCS.md
 TODO.md
+data.db
 
 .vscode
 __debug_bin

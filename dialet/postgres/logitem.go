@@ -11,6 +11,7 @@ type PostgresLog struct {
 	Op      int                    `json:"op"`
 	Id      string                 `json:"id"`
 	Payload map[string]interface{} `json:"payload"`
+	Changes map[string]interface{} `json:"changes"`
 }
 
 // log unmarshal to struct
@@ -21,6 +22,14 @@ func NewPostgresLog(log string) (*PostgresLog, error) {
 		return nil, err
 	}
 	return l, nil
+}
+
+func (l *PostgresLog) GetSchema() string {
+	return l.Schema
+}
+
+func (l *PostgresLog) GetTable() string {
+	return l.Table
 }
 
 // 获取日志记录类型 ddl dml
@@ -41,4 +50,8 @@ func (l *PostgresLog) GetTime() time.Time {
 // 获取具体的负载对象
 func (l *PostgresLog) GetPaylod() map[string]interface{} {
 	return l.Payload
+}
+
+func (l *PostgresLog) GetChange() map[string]interface{} {
+	return l.Changes
 }

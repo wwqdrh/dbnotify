@@ -14,6 +14,7 @@ import (
 	"github.com/wwqdrh/datamanager"
 	"github.com/wwqdrh/datamanager/dialet/postgres"
 	"github.com/wwqdrh/datamanager/transport/plain"
+	"github.com/wwqdrh/datamanager/transport/sqlite"
 )
 
 var (
@@ -22,7 +23,8 @@ var (
 )
 
 var (
-	dialet *postgres.PostgresDialet
+	dialet           *postgres.PostgresDialet
+	sqlite3transport *sqlite.SqliteTransport
 )
 
 func init() {
@@ -67,6 +69,24 @@ func server(ctx context.Context) {
 		}
 	})
 
+	engine.GET("/search", func(ctx *gin.Context) {
+		keyword := ctx.Query("keyword")
+		if keyword == "" {
+			ctx.String(200, "请传入keyword")
+			return
+		}
+
+		if sqlite3transport == nil {
+			ctx.String(200, "未初始化完成，稍后重试")
+			return
+		}
+		if data, err := sqlite3transport.Search(keyword); err != nil {
+			ctx.String(200, err.Error())
+		} else {
+			ctx.JSON(200, data)
+		}
+	})
+
 	srv := http.Server{
 		Addr:    fmt.Sprintf(":%d", *port),
 		Handler: engine,
@@ -107,10 +127,20 @@ func monitor(ctx context.Context) {
 	}()
 	datamanager.Logger.Info("start...")
 
-	transport := new(plain.PlainTransport)
-
+	plaintransport := new(plain.PlainTransport)
+	sqlite3transport, err = sqlite.NewSqliteTransport("data.db")
+	if err != nil {
+		datamanager.Logger.Error(err.Error())
+	}
 	for item := range q {
-		transport.Save(item)
+		plaintransport.Save(item)
+		l, err := postgres.NewPostgresLog(item)
+		if err != nil {
+			datamanager.Logger.Error(err.Error())
+		}
+		if err := sqlite3transport.Save(l); err != nil {
+			datamanager.Logger.Error(err.Error())
+		}
 	}
 	<-ctx.Done()
 }
