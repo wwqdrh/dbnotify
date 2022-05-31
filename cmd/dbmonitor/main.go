@@ -37,56 +37,7 @@ func init() {
 
 func server(ctx context.Context) {
 	engine := gin.Default()
-	engine.GET("/health", func(ctx *gin.Context) {
-		ctx.String(200, "ok")
-	})
-
-	engine.GET("/register", func(ctx *gin.Context) {
-		table := ctx.Query("table")
-		if table == "" {
-			ctx.String(200, "请传入table")
-			return
-		}
-
-		if err := dialet.Register(table); err != nil {
-			ctx.String(200, err.Error())
-		} else {
-			ctx.String(200, "注册成功")
-		}
-	})
-
-	engine.GET("/unregister", func(ctx *gin.Context) {
-		table := ctx.Query("table")
-		if table == "" {
-			ctx.String(200, "请传入table")
-			return
-		}
-
-		if err := dialet.UnRegister(table); err != nil {
-			ctx.String(200, err.Error())
-		} else {
-			ctx.String(200, "取消成功")
-		}
-	})
-
-	engine.GET("/search", func(ctx *gin.Context) {
-		keyword := ctx.Query("keyword")
-		if keyword == "" {
-			ctx.String(200, "请传入keyword")
-			return
-		}
-
-		if sqlite3transport == nil {
-			ctx.String(200, "未初始化完成，稍后重试")
-			return
-		}
-		if data, err := sqlite3transport.Search(keyword); err != nil {
-			ctx.String(200, err.Error())
-		} else {
-			ctx.JSON(200, data)
-		}
-	})
-
+	InitRouter(engine)
 	srv := http.Server{
 		Addr:    fmt.Sprintf(":%d", *port),
 		Handler: engine,

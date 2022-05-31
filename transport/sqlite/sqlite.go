@@ -38,7 +38,7 @@ var (
 
 	// record search
 	recordSearch = `
-	select op, recordID, payload, changes from %s payload like '\%%s\%'
+	select op, recordID, payload, changes from %s where payload like "%%%s%%"
 	`
 )
 
@@ -77,6 +77,29 @@ func (p *SqliteTransport) Load(string) ([]string, error) {
 }
 
 // search record by keyword(field=value)
-func (p *SqliteTransport) Search(string) ([]string, error) {
-	return nil, errors.New("plain transport no implete this")
+func (p *SqliteTransport) Search(tableName, key string, value interface{}) ([]string, error) {
+	keyword := fmt.Sprintf(`"%s":"%s"`, key, value)
+	fmt.Printf(recordSearch, tableName, escape.ReplaceAllString(keyword, `""`))
+	rows, err := p.driver.db.Query(
+		fmt.Sprintf(recordSearch, tableName, escape.ReplaceAllString(keyword, `""`)),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := []string{} // payloads: ..., changes: ...
+	for rows.Next() {
+		var (
+			op, recordID     int
+			payload, changes string
+		)
+		err = rows.Scan(&op, &recordID, &payload, &changes)
+		if err != nil {
+			continue
+		}
+		res = append(res, fmt.Sprintf("payloads:%s;changes:%s", payload, changes))
+	}
+
+	return res, nil
 }
