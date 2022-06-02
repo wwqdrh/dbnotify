@@ -1,5 +1,11 @@
 package postgres
 
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+)
+
 var (
 	// 获取当前的所有数据表名
 	sqlQueryTables = `
@@ -164,10 +170,22 @@ func (p *PostgresDialet) DeletePolicy() error {
 }
 
 // 获取监听channel，能够获取当前的日志修改记录 日志记录格式需要
-func (p *PostgresDialet) Watch() chan interface{} {
-	ch := make(chan interface{}, 100)
-	for i := 0; i < 10; i++ {
-		ch <- new(PostgresLog)
-	}
-	return ch
+func (p *PostgresDialet) Watch(ctx context.Context) chan interface{} {
+	res := make(chan interface{}, 8)
+
+	q := make(chan string, 8)
+	go func() {
+		var r *PostgresLog
+		for item := range q {
+			if err := json.Unmarshal([]byte(item), &r); err != nil {
+				fmt.Println(err)
+				continue
+			}
+			res <- r
+		}
+	}()
+	go func() {
+		p.stream.HandleEvents(ctx, q)
+	}()
+	return res
 }

@@ -1,6 +1,7 @@
 package dialet
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -34,7 +35,7 @@ func TestPostgresDialet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for item := range post.Watch() {
+	for item := range post.Watch(context.TODO()) {
 		if val, ok := item.(ILogData); ok {
 			fmt.Println(val.GetLabel())
 		}

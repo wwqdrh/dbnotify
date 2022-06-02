@@ -25,6 +25,7 @@ var (
 var (
 	dialet           *postgres.PostgresDialet
 	sqlite3transport *sqlite.SqliteTransport
+	watcher          *datamanager.Watcher
 )
 
 func init() {
@@ -59,6 +60,7 @@ func server(ctx context.Context) {
 
 func monitor(ctx context.Context) {
 	var err error
+	// dialet
 	dialet, err = postgres.NewPostgresDialet(*dsn)
 	if err != nil {
 		datamanager.Logger.Error(err.Error())
@@ -70,6 +72,11 @@ func monitor(ctx context.Context) {
 
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
+
+	// watcher
+	watcher = datamanager.NewWatcher(dialet)
+	watcher.Notify(ctx)
+
 	q := make(chan string, 1)
 	go func() {
 		if err := dialet.Stream().HandleEvents(ctx, q); err != nil {

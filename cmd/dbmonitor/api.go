@@ -9,6 +9,7 @@ func InitRouter(engine *gin.Engine) {
 	engine.GET("/register", Register)
 	engine.GET("/unregister", UnRegister)
 	engine.GET("/search", Search)
+	engine.POST("/callback", AddCallback)
 }
 
 func Register(ctx *gin.Context) {
@@ -61,4 +62,20 @@ func Search(ctx *gin.Context) {
 	} else {
 		ctx.JSON(200, data)
 	}
+}
+
+type AddCallbackReq struct {
+	Table string `json:"table" form:"table"`
+	Url   string `json:"url" form:"url"`
+}
+
+func AddCallback(ctx *gin.Context) {
+	var r AddCallbackReq
+	if err := ctx.ShouldBindJSON(&r); err != nil {
+		ctx.String(400, "请传入table、url以及table")
+		return
+	}
+
+	watcher.Register(r.Table, r.Url)
+	ctx.String(200, "ok")
 }

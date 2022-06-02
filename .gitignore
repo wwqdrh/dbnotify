@@ -4,6 +4,7 @@ version
 DOCS.md
 TODO.md
 data.db
+__pycache__
 
 .vscode
 __debug_bin
