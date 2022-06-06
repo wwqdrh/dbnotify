@@ -74,8 +74,9 @@ func monitor(ctx context.Context) {
 	defer cancel()
 
 	// watcher
-	watcher = datamanager.NewWatcher(dialet)
-	watcher.Notify(ctx)
+	// TODO 现在的数据只能消费一次
+	// watcher = datamanager.NewWatcher(dialet)
+	// watcher.Notify(ctx)
 
 	q := make(chan string, 1)
 	go func() {
