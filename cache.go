@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -23,17 +25,30 @@ type Policy struct {
 type Fn func() interface{}
 
 type Repo struct {
-	CacheFn  map[string]*Policy
-	ValueMap map[string]interface{}
+	CacheFn  map[string]*Policy     // TODO data race
+	ValueMap map[string]interface{} // TODO data race
+	WaitMap  map[string]*sync.Cond
 	Chan     chan dialet.ILogData
 	client   *redis.Client
+
+	onceFlag uint32   // 用于实现安全的双检锁
+	onceMap  sync.Map //  map[string]*keyRepo // 使用map映射
+	lock     sync.Mutex
+}
+
+type keyRepo struct {
+	once uint32
 }
 
 func NewRepo(ch chan dialet.ILogData) *Repo {
 	return &Repo{
 		CacheFn:  map[string]*Policy{},
 		ValueMap: map[string]interface{}{},
+		WaitMap:  map[string]*sync.Cond{},
 		Chan:     ch,
+		onceFlag: 0,
+		onceMap:  sync.Map{},
+		lock:     sync.Mutex{},
 	}
 }
 
@@ -92,14 +107,20 @@ func (r *Repo) SetValueV2(key, value string) error {
 	return nil
 }
 
-// cache数据的初始化操作
-// func (r *Repo) Initial() {
-
-// }
-
 // 注册key以及处理函数(返回数据，用于更新缓存中的key)
 func (r *Repo) Register(policy *Policy) {
 	r.CacheFn[policy.Key] = policy
+}
+
+func (r *Repo) GenInstance(key string) {
+	if val, _ := r.onceMap.LoadOrStore(key, &keyRepo{}); atomic.LoadUint32(&val.(*keyRepo).once) == 0 {
+		r.lock.Lock()
+		if v := val.(*keyRepo); v.once == 0 {
+			r.WaitMap[key] = sync.NewCond(&sync.Mutex{})
+			atomic.StoreUint32(&v.once, 1)
+		}
+		r.lock.Unlock()
+	}
 }
 
 // 触发key相应的更新操作
@@ -130,6 +151,9 @@ func (r *Repo) Trigger(log dialet.ILogData) {
 			if r.client != nil {
 				r.SetValueV2(key, fmt.Sprint(v))
 			}
+
+			r.GenInstance(key)
+			r.WaitMap[key].Broadcast()
 		}
 	}
 }
@@ -149,4 +173,14 @@ func (r *Repo) Notify(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// wait a cache trigger update
+// 存在多个channel进行调用的情况
+func (r *Repo) Wait(key string) {
+	r.GenInstance(key)
+
+	r.WaitMap[key].L.Lock() // wired 需要先加锁
+	r.WaitMap[key].Wait()
+	r.WaitMap[key].L.Unlock()
 }

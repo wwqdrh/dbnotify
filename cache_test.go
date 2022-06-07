@@ -101,3 +101,44 @@ func TestUpdateRecord(t *testing.T) {
 	cancel()
 	time.Sleep(1 * time.Second)
 }
+
+func TestCacheUpdateWait(t *testing.T) {
+	fieldValue := "value1"
+	lg := testLog{
+		schema: "public",
+		table:  "table1",
+		payload: map[string]interface{}{
+			"id":     1,
+			"field1": "value1",
+			"field2": "value2",
+		},
+	}
+
+	ch := make(chan dialet.ILogData, 1)
+	ctx, cancel := context.WithCancel(context.TODO())
+	r := NewRepo(ch)
+	r.Register(&Policy{
+		Key:   "cacheA",
+		Table: "table1",
+		Field: "field1",
+		Call: func() interface{} {
+			return fieldValue
+		},
+	})
+	go r.Notify(ctx)
+
+	if val, ok := r.GetValue("cacheA").(string); !ok || val != "value1" {
+		t.Error()
+	}
+
+	fieldValue = "value2"
+	ch <- &lg
+
+	r.Wait("cacheA") // 如果调用的时候错过了通知 会被一直阻塞在这
+
+	if val, ok := r.GetValue("cacheA").(string); !ok || val != "value2" {
+		t.Error()
+	}
+	cancel()
+	time.Sleep(1 * time.Second)
+}
