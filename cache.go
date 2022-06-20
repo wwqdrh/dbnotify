@@ -1,6 +1,7 @@
 package datamanager
 
 import (
+	"container/list"
 	"context"
 	"fmt"
 	"strings"
@@ -12,6 +13,10 @@ import (
 	"github.com/wwqdrh/datamanager/dialet"
 )
 
+// cache的repo操作
+
+type Fn func() interface{}
+
 // 触发监听的策略
 type Policy struct {
 	Key   string // must unique
@@ -20,13 +25,53 @@ type Policy struct {
 	Call  Fn
 }
 
-// cache的repo操作
+type cacheMap struct {
+	sync.Map
+	ch chan dialet.ILogData
+}
 
-type Fn func() interface{}
+// var cacheMap = sync.Map{} // key => cacheRepo
+
+type cacheRepo struct {
+	fn    *Policy
+	Value interface{}
+	wait  *list.List
+}
+
+func NewCacheMap(ch chan dialet.ILogData, ctx context.Context) *cacheMap {
+	r := &cacheMap{
+		Map: sync.Map{},
+		ch:  ch,
+	}
+
+	go func() {
+		select {
+		case item := <-ch:
+			r.Trigger(item)
+		case <-ctx.Done():
+			return
+		}
+	}()
+
+	return r
+}
+
+// 等待事件 将当前的操作添加到cacheRepo的wait链表中 并发不安全
+func (c *cacheMap) Wait(key string) {
+
+}
+
+func (c *cacheMap) Register(policy *Policy) {
+
+}
+
+func (c *cacheMap) Trigger(val dialet.ILogData) {
+
+}
 
 type Repo struct {
-	CacheFn  map[string]*Policy     // TODO data race
-	ValueMap map[string]interface{} // TODO data race
+	CacheFn  sync.Map // map[string]*Policy     //
+	ValueMap sync.Map // map[string]interface{} //
 	WaitMap  map[string]*sync.Cond
 	Chan     chan dialet.ILogData
 	client   *redis.Client
@@ -42,8 +87,8 @@ type keyRepo struct {
 
 func NewRepo(ch chan dialet.ILogData) *Repo {
 	return &Repo{
-		CacheFn:  map[string]*Policy{},
-		ValueMap: map[string]interface{}{},
+		CacheFn:  sync.Map{}, // map[string]*Policy{},
+		ValueMap: sync.Map{}, //map[string]interface{}{},
 		WaitMap:  map[string]*sync.Cond{},
 		Chan:     ch,
 		onceFlag: 0,
@@ -58,15 +103,18 @@ func (r *Repo) InitRedisCache(client *redis.Client) {
 }
 
 func (r *Repo) GetValue(key string) interface{} {
-	if val, ok := r.ValueMap[key]; ok {
+	// if val, ok := r.ValueMap[key]; ok {
+	if val, ok := r.ValueMap.Load(key); ok {
 		return val
 	}
 
-	if fn, ok := r.CacheFn[key]; !ok {
+	// if fn, ok := r.CacheFn[key]; !ok {
+	if fn, ok := r.CacheFn.Load(key); !ok {
 		return nil
 	} else {
-		v := fn.Call()
-		r.ValueMap[key] = v
+		v := fn.(*Policy).Call()
+		// r.ValueMap[key] = v
+		r.ValueMap.Store(key, v)
 		return v
 	}
 }
@@ -109,7 +157,8 @@ func (r *Repo) SetValueV2(key, value string) error {
 
 // 注册key以及处理函数(返回数据，用于更新缓存中的key)
 func (r *Repo) Register(policy *Policy) {
-	r.CacheFn[policy.Key] = policy
+	// r.CacheFn[policy.Key] = policy
+	r.CacheFn.Store(policy.Key, policy)
 }
 
 func (r *Repo) GenInstance(key string) {
@@ -125,9 +174,11 @@ func (r *Repo) GenInstance(key string) {
 
 // 触发key相应的更新操作
 func (r *Repo) Trigger(log dialet.ILogData) {
-	for key, policy := range r.CacheFn {
+	r.CacheFn.Range(func(k, value interface{}) bool {
+		key := k.(string)
+		policy := value.(*Policy)
 		if policy.Table != log.GetTable() {
-			continue
+			return true
 		}
 
 		if policy.Field != "*" {
@@ -139,14 +190,17 @@ func (r *Repo) Trigger(log dialet.ILogData) {
 				}
 			}
 			if invalid {
-				continue
+				return true
 			}
 		}
 
 		// 验证通过，触发缓存执行
-		if val, ok := r.CacheFn[key]; ok {
-			v := val.Call()
-			r.ValueMap[key] = v
+		// if val, ok := r.CacheFn[key]; ok {
+		if val, ok := r.CacheFn.Load(key); ok {
+			v := val.(*Policy).Call()
+			// v := val.Call()
+			// r.ValueMap[key] = v
+			r.ValueMap.Store(key, v)
 
 			if r.client != nil {
 				r.SetValueV2(key, fmt.Sprint(v))
@@ -155,7 +209,8 @@ func (r *Repo) Trigger(log dialet.ILogData) {
 			r.GenInstance(key)
 			r.WaitMap[key].Broadcast()
 		}
-	}
+		return true
+	})
 }
 
 // 后台线程 获取操作日志

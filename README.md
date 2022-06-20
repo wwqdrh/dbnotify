@@ -63,7 +63,7 @@ dbmonitor -dsn postgres://[用户名]:[密码]@localhost:5432/datamanager\?sslmo
 提供http接口进行访问，注册表监听、取消监听
 <br>
 
-<img src="./assets/img/示例.png" />
+<img src="./docs/img/示例.png" />
 <br>
 
 ### 示例

@@ -55,7 +55,7 @@ func TestSimpleRegister(t *testing.T) {
 		t.Error()
 	}
 	cacheValue = "valueB"
-	ch <- new(testLog)
+	ch <- &testLog{table: "tableA"}
 	time.Sleep(1 * time.Second) // 等待缓存更新完成
 	if val, ok := r.GetValue("cacheA").(string); !ok || val != "valueB" {
 		t.Error()
