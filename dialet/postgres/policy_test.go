@@ -1,10 +1,15 @@
 package postgres
 
 import (
+	"os"
 	"testing"
 )
 
 func TestMigratePolicy(t *testing.T) {
+	if os.Getenv("LOCAL") == "" {
+		t.Skip("no local enviroment")
+	}
+
 	PolicyName = "_policy"
 	if err := (Policy{}).Migrate(); err != nil {
 		t.Fatal(err)

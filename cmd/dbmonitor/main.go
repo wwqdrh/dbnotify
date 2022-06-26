@@ -15,6 +15,7 @@ import (
 	"github.com/wwqdrh/datamanager/dialet/postgres"
 	"github.com/wwqdrh/datamanager/transport/plain"
 	"github.com/wwqdrh/datamanager/transport/sqlite"
+	"github.com/wwqdrh/logger"
 )
 
 var (
@@ -45,17 +46,22 @@ func server(ctx context.Context) {
 	}
 
 	go func() {
-		datamanager.Logger.Info(fmt.Sprintf(":%d: is start", *port))
+		logger.DefaultLogger.Info(fmt.Sprintf(":%d: is start", *port))
 		if err := srv.ListenAndServe(); err != nil {
-			datamanager.Logger.Error(err.Error())
+			logger.DefaultLogger.Error(err.Error())
 		}
 	}()
 	<-ctx.Done()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	srv.Shutdown(ctx)
-	datamanager.Logger.Info("服务退出")
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.DefaultLogger.Error("服务异常退出" + err.Error())
+	} else {
+		logger.DefaultLogger.Info("服务正常退出")
+
+	}
+
 }
 
 func monitor(ctx context.Context) {
@@ -63,12 +69,18 @@ func monitor(ctx context.Context) {
 	// dialet
 	dialet, err = postgres.NewPostgresDialet(*dsn)
 	if err != nil {
-		datamanager.Logger.Error(err.Error())
+		logger.DefaultLogger.Error(err.Error())
+
 		return
 	}
 
-	dialet.Initial()
-	dialet.Register("notes")
+	if err := dialet.Initial(); err != nil {
+		logger.DefaultLogger.Error(err.Error())
+		return
+	}
+	if err := dialet.Register("notes"); err != nil {
+		logger.DefaultLogger.Error(err.Error())
+	}
 
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
@@ -81,24 +93,27 @@ func monitor(ctx context.Context) {
 	q := make(chan string, 1)
 	go func() {
 		if err := dialet.Stream().HandleEvents(ctx, q); err != nil {
-			datamanager.Logger.Error(err.Error())
+			logger.DefaultLogger.Error(err.Error())
+
 		}
 	}()
-	datamanager.Logger.Info("start...")
+	logger.DefaultLogger.Info("start...")
 
 	plaintransport := new(plain.PlainTransport)
 	sqlite3transport, err = sqlite.NewSqliteTransport("data.db")
 	if err != nil {
-		datamanager.Logger.Error(err.Error())
+		logger.DefaultLogger.Error(err.Error())
 	}
 	for item := range q {
 		plaintransport.Save(item)
 		l, err := postgres.NewPostgresLog(item)
 		if err != nil {
-			datamanager.Logger.Error(err.Error())
+			logger.DefaultLogger.Error(err.Error())
+
 		}
 		if err := sqlite3transport.Save(l); err != nil {
-			datamanager.Logger.Error(err.Error())
+			logger.DefaultLogger.Error(err.Error())
+
 		}
 	}
 	<-ctx.Done()
@@ -109,8 +124,6 @@ func monitor(ctx context.Context) {
 // 2、connection the db
 // 3、start a http server for action
 func main() {
-	defer datamanager.Logger.Sync()
-
 	ctx, cancel := context.WithCancel(context.TODO())
 	go server(ctx)
 	go monitor(ctx)

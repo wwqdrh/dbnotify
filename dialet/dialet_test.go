@@ -30,6 +30,10 @@ func init() {
 }
 
 func TestPostgresDialet(t *testing.T) {
+	if os.Getenv("LOCAL") == "" {
+		t.Skip("no local enviroment")
+	}
+
 	post, err := postgres.NewPostgresDialet(testConnectionString)
 	if err != nil {
 		t.Fatal(err)

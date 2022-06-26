@@ -8,19 +8,9 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
-	"go.uber.org/zap"
 )
 
 var Conf *appConfig
-var Logger *zap.Logger
-
-func init() {
-	var err error
-	Logger, err = zap.NewProduction()
-	if err != nil {
-		panic(err)
-	}
-}
 
 type appConfig struct {
 	System struct {

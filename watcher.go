@@ -78,6 +78,10 @@ func (w *Watcher) HTTPPost(url string, data interface{}) error {
 		return err
 	}
 
-	http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
 	return nil
 }

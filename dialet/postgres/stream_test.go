@@ -37,6 +37,14 @@ func init() {
 	}
 }
 
+func TestMain(m *testing.M) {
+	if os.Getenv("LOCAL") == "" {
+		return
+	}
+
+	m.Run()
+}
+
 func Test_generatePatch(t *testing.T) {
 	type args struct {
 		a *ptypes_struct.Struct

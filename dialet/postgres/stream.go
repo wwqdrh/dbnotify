@@ -117,16 +117,10 @@ func (s *Stream) redactFields(e *RawEvent) {
 		if fields, ok := tables[e.GetTable()]; ok {
 			for _, rf := range fields {
 				if e.Payload != nil {
-					if _, ok := e.Payload.Fields[rf]; ok {
-						//remove field from payload
-						delete(e.Payload.Fields, rf)
-					}
+					delete(e.Payload.Fields, rf)
 				}
 				if e.Previous != nil {
-					if _, ok := e.Previous.Fields[rf]; ok {
-						//remove field from previous payload
-						delete(e.Previous.Fields, rf)
-					}
+					delete(e.Previous.Fields, rf)
 				}
 			}
 		}

@@ -11,18 +11,15 @@ import (
 	"github.com/wwqdrh/datamanager"
 	mydialet "github.com/wwqdrh/datamanager/dialet"
 	"github.com/wwqdrh/datamanager/dialet/postgres"
-	"github.com/wwqdrh/datamanager/transport/sqlite"
+	"github.com/wwqdrh/logger"
 )
 
 var (
-	dsn  *string = flag.String("dsn", "", "需要连接的postgresdsn: postgres://[user]:[password]@[host]:[port]/[db]?sslmode=disable") // postgres://postgres:hui123456@localhost:5432/datamanager?sslmode=disable
-	port *int    = flag.Int("port", 8000, "用于交互的http端口")
+	dsn *string = flag.String("dsn", "", "需要连接的postgresdsn: postgres://[user]:[password]@[host]:[port]/[db]?sslmode=disable") // postgres://postgres:hui123456@localhost:5432/datamanager?sslmode=disable
 )
 
 var (
-	dialet           *postgres.PostgresDialet
-	sqlite3transport *sqlite.SqliteTransport
-	watcher          *datamanager.Watcher
+	dialet *postgres.PostgresDialet
 )
 
 func init() {
@@ -38,8 +35,6 @@ func init() {
 // 2、connection the db
 // 3、start a http server for action
 func main() {
-	defer datamanager.Logger.Sync()
-
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 	ch := monitor(ctx)
@@ -64,19 +59,23 @@ func monitor(ctx context.Context) chan mydialet.ILogData {
 	// dialet
 	dialet, err = postgres.NewPostgresDialet(*dsn)
 	if err != nil {
-		datamanager.Logger.Error(err.Error())
+		logger.DefaultLogger.Error(err.Error())
 		return nil
 	}
 
-	dialet.Initial()
-	dialet.Register("notes")
+	if err := dialet.Initial(); err != nil {
+		logger.DefaultLogger.Panic(err.Error())
+	}
+	if err := dialet.Register("notes"); err != nil {
+		logger.DefaultLogger.Panic(err.Error())
+	}
 
 	ctx, cancel := context.WithCancel(context.TODO())
 
 	q := make(chan string, 1)
 	go func() {
 		if err := dialet.Stream().HandleEvents(ctx, q); err != nil {
-			datamanager.Logger.Error(err.Error())
+			logger.DefaultLogger.Error(err.Error())
 		}
 	}()
 
@@ -86,7 +85,7 @@ func monitor(ctx context.Context) chan mydialet.ILogData {
 		for item := range q {
 			l, err := postgres.NewPostgresLog(item)
 			if err != nil {
-				datamanager.Logger.Error(err.Error())
+				logger.DefaultLogger.Error(err.Error())
 			}
 			ch <- l
 		}

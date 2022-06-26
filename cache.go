@@ -1,7 +1,6 @@
 package datamanager
 
 import (
-	"container/list"
 	"context"
 	"fmt"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/wwqdrh/datamanager/dialet"
+	"github.com/wwqdrh/logger"
 )
 
 // cache的repo操作
@@ -32,11 +32,11 @@ type cacheMap struct {
 
 // var cacheMap = sync.Map{} // key => cacheRepo
 
-type cacheRepo struct {
-	fn    *Policy
-	Value interface{}
-	wait  *list.List
-}
+// type cacheRepo struct {
+// 	fn    *Policy
+// 	Value interface{}
+// 	wait  *list.List
+// }
 
 func NewCacheMap(ch chan dialet.ILogData, ctx context.Context) *cacheMap {
 	r := &cacheMap{
@@ -140,7 +140,9 @@ func (r *Repo) GetValueV2(key string) interface{} {
 
 	if res == nil {
 		res = r.GetValue(key)
-		r.SetValueV2(key, fmt.Sprint(res))
+		if err := r.SetValueV2(key, fmt.Sprint(res)); err != nil {
+			logger.DefaultLogger.Error(err.Error())
+		}
 	}
 	return res
 }
@@ -203,7 +205,9 @@ func (r *Repo) Trigger(log dialet.ILogData) {
 			r.ValueMap.Store(key, v)
 
 			if r.client != nil {
-				r.SetValueV2(key, fmt.Sprint(v))
+				if err := r.SetValueV2(key, fmt.Sprint(v)); err != nil {
+					logger.DefaultLogger.Error(err.Error())
+				}
 			}
 
 			r.GenInstance(key)

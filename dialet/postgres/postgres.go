@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/wwqdrh/logger"
 )
 
 var (
@@ -185,7 +187,9 @@ func (p *PostgresDialet) Watch(ctx context.Context) chan interface{} {
 		}
 	}()
 	go func() {
-		p.stream.HandleEvents(ctx, q)
+		if err := p.stream.HandleEvents(ctx, q); err != nil {
+			logger.DefaultLogger.Error(err.Error())
+		}
 	}()
 	return res
 }
