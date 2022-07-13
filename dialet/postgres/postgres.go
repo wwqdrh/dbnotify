@@ -1,3 +1,4 @@
+//go:generate protoc -I . --go_out=. --go-grpc_out=. pqstream.proto
 package postgres
 
 import (

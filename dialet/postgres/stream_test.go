@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/jsonpb"
-	google_protobuf "github.com/golang/protobuf/ptypes/struct"
 	ptypes_struct "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -104,19 +103,19 @@ func TestServer_redactFields(t *testing.T) {
 	event := &RawEvent{
 		Schema: "public",
 		Table:  "users",
-		Payload: &google_protobuf.Struct{
-			Fields: map[string]*google_protobuf.Value{
+		Payload: &ptypes_struct.Struct{
+			Fields: map[string]*ptypes_struct.Value{
 				"first_name": {
-					Kind: &google_protobuf.Value_StringValue{StringValue: "first_name"},
+					Kind: &ptypes_struct.Value_StringValue{StringValue: "first_name"},
 				},
 				"last_name": {
-					Kind: &google_protobuf.Value_StringValue{StringValue: "last_name"},
+					Kind: &ptypes_struct.Value_StringValue{StringValue: "last_name"},
 				},
 				"password": {
-					Kind: &google_protobuf.Value_StringValue{StringValue: "_insecure_"},
+					Kind: &ptypes_struct.Value_StringValue{StringValue: "_insecure_"},
 				},
 				"email": {
-					Kind: &google_protobuf.Value_StringValue{StringValue: "someone@corp.com"},
+					Kind: &ptypes_struct.Value_StringValue{StringValue: "someone@corp.com"},
 				},
 			},
 		},
@@ -140,10 +139,10 @@ func TestServer_redactFields(t *testing.T) {
 		{"nil_payload_nonnil_previous", args{redactions: rfields, incoming: &RawEvent{
 			Schema: "public",
 			Table:  "users",
-			Previous: &google_protobuf.Struct{
-				Fields: map[string]*google_protobuf.Value{
+			Previous: &ptypes_struct.Struct{
+				Fields: map[string]*ptypes_struct.Value{
 					"password": {
-						Kind: &google_protobuf.Value_StringValue{StringValue: "password"},
+						Kind: &ptypes_struct.Value_StringValue{StringValue: "password"},
 					},
 				},
 			},
@@ -162,13 +161,13 @@ func TestServer_redactFields(t *testing.T) {
 				expected: &RawEvent{
 					Schema: "public",
 					Table:  "users",
-					Payload: &google_protobuf.Struct{
-						Fields: map[string]*google_protobuf.Value{
+					Payload: &ptypes_struct.Struct{
+						Fields: map[string]*ptypes_struct.Value{
 							"first_name": {
-								Kind: &google_protobuf.Value_StringValue{StringValue: "first_name"},
+								Kind: &ptypes_struct.Value_StringValue{StringValue: "first_name"},
 							},
 							"last_name": {
-								Kind: &google_protobuf.Value_StringValue{StringValue: "last_name"},
+								Kind: &ptypes_struct.Value_StringValue{StringValue: "last_name"},
 							},
 						},
 					},
