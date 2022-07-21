@@ -1,0 +1,47 @@
+version: "3"
+
+networks:
+  datamanager-dev:
+
+volumes:
+  db-data:
+
+services:
+  mysql:
+    image: mysql:5.7
+    networks:
+      - devnet
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+    environment:
+      - TZ=${TZ}
+      - MYSQL_USER=${MYSQL_USERNAME} # 设置 Mysql 用户名称
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD} # 设置 Mysql 用户密码
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} # 设置 Mysql root 用户密码
+    volumes:
+      - ./mysql/init:/docker-entrypoint-initdb.d/
+      - db-data:/var/lib/mysql # 引用 .env 配置中 DATA_PATH_HOST 变量，将宿主机上存放 Mysql 数据的目录挂载到容器中 /var/lib/mysql 目录
+    ports:
+      - "${MYSQL_PORT}:3306"
+
+  redis:
+    image: redis:6-alpine
+    networks:
+      - devnet
+    deploy:
+      replicas: 1
+      # update_config:
+      #   parallelism: 2
+      #   delay: 10s
+      restart_policy:
+        condition: on-failure
+    entrypoint:
+      - "redis-server"
+      - "/etc/redis/redis.conf"
+    volumes:
+      - ./redis/redis.conf:/etc/redis/redis.conf
+    environment:
+      - TZ=${TZ}
+    ports:
+      - "${REDIS_PORT}:6379"
