@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"regexp"
 	"testing"
 	"time"
@@ -29,6 +30,34 @@ var (
 	// testStreamUpdateTemplate  = `update notes_stream set note = 'i%s' where id=1`
 )
 
+func testDBConn(t *testing.T, db *sql.DB, testcase string) (connectionString string, cleanup func()) {
+	s := fmt.Sprintf("test_pqstream_%s", testcase)
+	db.Exec(fmt.Sprintf("drop database %s", s))
+	_, err := db.Exec(fmt.Sprintf("create database %s", s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dsn := fmt.Sprintf(testConnectionStringTemplate, s)
+	newDB, err := sql.Open("postgres", dsn)
+	if err != nil {
+		t.Skip(err)
+	}
+	if err := db.Ping(); err != nil {
+		t.Skip(errors.Wrap(err, "ping"))
+	}
+	defer newDB.Close()
+	_, err = newDB.Exec(testStreamDatabaseDDL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dsn, func() {
+		_, err := db.Exec(fmt.Sprintf("drop database %s", s))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 type StreamSuite struct {
 	suite.Suite
 
@@ -36,10 +65,15 @@ type StreamSuite struct {
 }
 
 func TestStreamSuite(t *testing.T) {
+	dsn := os.Getenv("DB_DSN")
+	if dsn == "" {
+		t.Skip("dsn为空")
+	}
+
 	tableRe, err := regexp.Compile(".*")
 	require.Nil(t, err)
 
-	server, err := NewServer("postgres://postgres:hui123456@127.0.0.1:5432/datamanager?sslmode=disable", []ServerOption{
+	server, err := NewServer(dsn, []ServerOption{
 		WithTableRegexp(tableRe),
 	}...)
 	require.Nil(t, err)
@@ -207,7 +241,7 @@ func (s *StreamSuite) TestHandleEvents() {
 	}
 }
 
-func Test_generatePatch(t *testing.T) {
+func (s *StreamSuite) TestGeneratePatch() {
 	type args struct {
 		a *ptypes_struct.Struct
 		b *ptypes_struct.Struct
@@ -231,7 +265,7 @@ func Test_generatePatch(t *testing.T) {
 		}}, `{"foo":"bar"}`, false},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		s.T().Run(tt.name, func(t *testing.T) {
 			got, err := generatePatch(tt.args.a, tt.args.b)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("generatePatch() error = %v, wantErr %v", err, tt.wantErr)
@@ -248,7 +282,7 @@ func Test_generatePatch(t *testing.T) {
 	}
 }
 
-func TestServer_redactFields(t *testing.T) {
+func (s *StreamSuite) TestServerRedactFields() {
 
 	rfields := FieldRedactions{
 		"public": {"users": []string{
@@ -258,9 +292,9 @@ func TestServer_redactFields(t *testing.T) {
 		},
 	}
 
-	s, err := NewServer(testConnectionString, WithFieldRedactions(rfields))
+	srv, err := NewServer(testConnectionString, WithFieldRedactions(rfields))
 	if err != nil {
-		t.Fatal(err)
+		s.T().Fatal(err)
 	}
 
 	event := &RawEvent{
@@ -348,9 +382,9 @@ func TestServer_redactFields(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s.redactions = tt.args.redactions
-			s.redactFields(tt.args.incoming)
+		s.T().Run(tt.name, func(t *testing.T) {
+			srv.redactions = tt.args.redactions
+			srv.redactFields(tt.args.incoming)
 
 			fmt.Println(tt.args.incoming, tt.args.expected)
 			// if got := tt.args.incoming; tt.args.expected != nil && !cmp.Equal(got, tt.args.expected) {
@@ -360,7 +394,7 @@ func TestServer_redactFields(t *testing.T) {
 	}
 }
 
-func TestDecodeRedactions(t *testing.T) {
+func (s *StreamSuite) TestDecodeRedactions() {
 	type args struct {
 		r string
 	}
@@ -385,20 +419,20 @@ func TestDecodeRedactions(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		s.T().Run(tt.name, func(t *testing.T) {
 			got, err := DecodeRedactions(tt.args.r)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeRedactions() error = %v, wantErr %v", err, tt.wantErr)
+				s.T().Errorf("DecodeRedactions() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !cmp.Equal(got, tt.want) {
-				t.Errorf("DecodeRedactions() = %v, want %v", got, tt.want)
+				s.T().Errorf("DecodeRedactions() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestWithTableRegexp(t *testing.T) {
+func (s *StreamSuite) TestWithTableRegexp() {
 	re := regexp.MustCompile(".*")
 	tests := []struct {
 		name string
@@ -407,7 +441,7 @@ func TestWithTableRegexp(t *testing.T) {
 		{"basic", re},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		s.T().Run(tt.name, func(t *testing.T) {
 			s, err := NewServer(testConnectionString, WithTableRegexp(re))
 			if err != nil {
 				t.Fatal(err)
@@ -419,7 +453,7 @@ func TestWithTableRegexp(t *testing.T) {
 	}
 }
 
-func TestNewServer(t *testing.T) {
+func (s *StreamSuite) TestNewServer() {
 	type args struct {
 		connectionString string
 		opts             []ServerOption
@@ -441,7 +475,7 @@ func TestNewServer(t *testing.T) {
 		}, nil, false},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		s.T().Run(tt.name, func(t *testing.T) {
 			got, err := NewServer(tt.args.connectionString, tt.args.opts...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewServer() error = %v, wantErr %v", err, tt.wantErr)
@@ -451,33 +485,5 @@ func TestNewServer(t *testing.T) {
 				tt.check(t, got)
 			}
 		})
-	}
-}
-
-func testDBConn(t *testing.T, db *sql.DB, testcase string) (connectionString string, cleanup func()) {
-	s := fmt.Sprintf("test_pqstream_%s", testcase)
-	db.Exec(fmt.Sprintf("drop database %s", s))
-	_, err := db.Exec(fmt.Sprintf("create database %s", s))
-	if err != nil {
-		t.Fatal(err)
-	}
-	dsn := fmt.Sprintf(testConnectionStringTemplate, s)
-	newDB, err := sql.Open("postgres", dsn)
-	if err != nil {
-		t.Skip(err)
-	}
-	if err := db.Ping(); err != nil {
-		t.Skip(errors.Wrap(err, "ping"))
-	}
-	defer newDB.Close()
-	_, err = newDB.Exec(testStreamDatabaseDDL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return dsn, func() {
-		_, err := db.Exec(fmt.Sprintf("drop database %s", s))
-		if err != nil {
-			t.Fatal(err)
-		}
 	}
 }
