@@ -6,106 +6,66 @@ import (
 	"os"
 	"testing"
 	"time"
-)
 
-var postgresDialet *PostgresDialet
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+)
 
 var (
-	testDatabaseDDL    = `create table if not exists notes (id serial, created_at timestamp, name varchar(100), note text)`
-	testInsert         = `insert into notes values (default, default, 'user1', 'here is a sample note')`
-	testInsertTemplate = `insert into notes values (default, default, 'user1' '%s')`
-	testUpdate         = `update notes set note = 'here is an updated note' where id=1`
-	testUpdateTemplate = `update notes set note = 'i%s' where id=1`
+	testDatabaseDDL     = `create table if not exists notes_postgres (id serial, created_at timestamp, name varchar(100), note text)`
+	testInsert          = `insert into notes_postgres values (default, default, 'user1', 'here is a sample note')`
+	testDatabaseDropDDL = `drop table notes_postgres`
+	testInsertTemplate  = `insert into notes_postgres values (default, default, 'user1' '%s')`
+	testUpdate          = `update notes_postgres set note = 'here is an updated note' where id=1`
+	testUpdateTemplate  = `update notes_postgres set note = 'i%s' where id=1`
 )
 
-// build test table and drop
-func dbMain() bool {
-	var s string
-	if s = os.Getenv("DB_DSN"); s == "" {
-		fmt.Println("未设置DB_DSN，跳过测试")
-		return false
-	}
+type PostgresSuite struct {
+	suite.Suite
 
-	var err error
-	postgresDialet, err = NewPostgresDialet(s)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	_, err = postgresDialet.stream.DB().Exec(testDatabaseDDL)
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-	return true
+	dial *PostgresDialet
 }
 
-// should have a pre-difine table, example the TestMain
-func TestAddTablePolicy(t *testing.T) {
-	if !dbMain() {
-		t.Skip("未初始化db")
+func TestPostgresSuite(t *testing.T) {
+	dsn := os.Getenv("DB_DSN")
+	if dsn == "" {
+		t.Skip("dsn为空")
 	}
-	defer func() {
-		postgresDialet.Close()
-	}()
 
-	if err := postgresDialet.Register("notes"); err != nil {
-		t.Fatal(err)
-	}
-	if err := postgresDialet.UnRegister("notes"); err != nil {
-		t.Fatal(err)
-	}
+	dial, err := NewPostgresDialet(dsn)
+	require.Nil(t, err)
+
+	suite.Run(t, &PostgresSuite{
+		dial: dial,
+	})
 }
 
-func TestAddTableAndInsert(t *testing.T) {
-	if !dbMain() {
-		t.Skip("未初始化db")
-	}
-	defer func() {
-		postgresDialet.Close()
-	}()
+func (s *PostgresSuite) SetupSuite() {
+	assert.Nil(s.T(), s.dial.Exec(testDatabaseDDL))
+	assert.Nil(s.T(), s.dial.stream.InstallTriggers())
+	// assert.Nil(s.T(), s.dial.Register("notes_postgres"))
+}
 
-	if err := postgresDialet.Register("notes"); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := postgresDialet.UnRegister("notes"); err != nil {
-			t.Fatal(err)
-		}
-	}()
+func (s *PostgresSuite) TearDownSuite() {
+	assert.Nil(s.T(), s.dial.Exec(testDatabaseDropDDL))
+	assert.Nil(s.T(), s.dial.UnRegister("notes_postgres"))
+}
 
-	if _, err := postgresDialet.stream.DB().Exec(testInsert); err != nil {
-		t.Fatal(err)
-	}
+func (s *PostgresSuite) TestAddTableAndInsert() {
+	require.Nil(s.T(), s.dial.Exec(testInsert))
+	time.Sleep(1 * time.Second)
 }
 
 // {"schema":"public","table":"notes","op":1,"id":"14","payload":{"created_at":null,"id":14,"name":"user1","note":"here is a sample note"}}
 // {"schema":"public","table":"notes","op":2,"id":"1","payload":{"created_at":null,"id":1,"name":"user1","note":"here is an updated note"},"changes":{"note":"here is a sample note"}}
 // {"schema":"public","table":"notes","op":1,"id":"15","payload":{"created_at":null,"id":15,"name":"user1","note":"here is a sample note"}}
-func TestAddTableAndInsertAndNotify(t *testing.T) {
-	if !dbMain() {
-		t.Skip("未初始化db")
-	}
-	defer func() {
-		postgresDialet.Close()
-	}()
-
-	if err := postgresDialet.Register("notes"); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := postgresDialet.UnRegister("notes"); err != nil {
-			t.Fatal(err)
-		}
-	}()
-
+func (s *PostgresSuite) TestAddTableAndInsertAndNotify() {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 	q := make(chan string, 1)
 	go func() {
-		if err := postgresDialet.stream.HandleEvents(ctx, q); err != nil {
-			t.Error(err)
-		}
+		assert.Nil(s.T(), s.dial.stream.HandleEvents(ctx, q))
 	}()
 	go func() {
 		for item := range q {
@@ -113,14 +73,14 @@ func TestAddTableAndInsertAndNotify(t *testing.T) {
 		}
 	}()
 
-	if _, err := postgresDialet.stream.DB().Exec(testInsert); err != nil {
-		t.Error(err)
+	if _, err := s.dial.stream.DB().Exec(testInsert); err != nil {
+		s.T().Error(err)
 	}
-	if _, err := postgresDialet.stream.DB().Exec(testUpdate); err != nil {
-		t.Error(err)
+	if _, err := s.dial.stream.DB().Exec(testUpdate); err != nil {
+		s.T().Error(err)
 	}
-	if _, err := postgresDialet.stream.DB().Exec(testInsert); err != nil {
-		t.Error(err)
+	if _, err := s.dial.stream.DB().Exec(testInsert); err != nil {
+		s.T().Error(err)
 	}
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second) // wait the event done
 }

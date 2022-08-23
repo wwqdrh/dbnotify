@@ -194,3 +194,8 @@ func (p *PostgresDialet) Watch(ctx context.Context) chan interface{} {
 	}()
 	return res
 }
+
+func (p *PostgresDialet) Exec(sql string, args ...interface{}) error {
+	_, err := p.stream.db.Exec(sql, args...)
+	return err
+}

@@ -1,3 +1,5 @@
+//go:build todotest
+
 package mysql
 
 import (

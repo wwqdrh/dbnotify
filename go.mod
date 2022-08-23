@@ -16,6 +16,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/viper v1.11.0
 	github.com/stretchr/testify v1.8.0
+	github.com/wwqdrh/logger v0.0.2
 	google.golang.org/protobuf v1.28.0
 	gorm.io/gorm v1.23.4
 )
@@ -56,7 +57,6 @@ require (
 	github.com/subosito/gotenv v1.2.0 // indirect
 	github.com/tinylib/msgp v1.1.6 // indirect
 	github.com/ugorji/go/codec v1.1.7 // indirect
-	github.com/wwqdrh/logger v0.0.2 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect

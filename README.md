@@ -33,6 +33,23 @@
 - 🗂 支持postgres
 
 ## 使用手册
+
+### 开发环境搭建
+
+> for developer
+
+```bash
+docker stack deploy -c stack-dev.yaml datamanager
+```
+
+如何测试
+
+```bash
+修改makefile中的`ENV_DB_DSN`为本机的dsn环境
+
+执行`make cover -e DB_DSN="postgres://postgres:hui123456@localhost:5432/datamanager?sslmode=disable"`
+```
+
 ### 安装
 <br>
 

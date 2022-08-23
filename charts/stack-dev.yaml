@@ -10,25 +10,33 @@ services:
   mysql:
     image: mysql:5.7
     networks:
-      - devnet
+      - datamanager-dev
     deploy:
       placement:
         constraints: [node.role == manager]
     environment:
-      - TZ=${TZ}
-      - MYSQL_USER=${MYSQL_USERNAME} # 设置 Mysql 用户名称
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD} # 设置 Mysql 用户密码
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} # 设置 Mysql root 用户密码
-    volumes:
-      - ./mysql/init:/docker-entrypoint-initdb.d/
-      - db-data:/var/lib/mysql # 引用 .env 配置中 DATA_PATH_HOST 变量，将宿主机上存放 Mysql 数据的目录挂载到容器中 /var/lib/mysql 目录
+      - TZ=Asia/Shanghai
+      - MYSQL_ROOT_PASSWORD=123456 # 设置 Mysql root 用户密码
     ports:
-      - "${MYSQL_PORT}:3306"
+      - "3306:3306"
+
+  postgres:
+    image: postgres:14-alpine
+    networks:
+      - datamanager-dev
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+    environment:
+      - TZ=Asia/Shanghai
+      - POSTGRES_PASSWORD=123456
+    ports:
+      - "5432:5432"
 
   redis:
     image: redis:6-alpine
     networks:
-      - devnet
+      - datamanager-dev
     deploy:
       replicas: 1
       # update_config:
@@ -42,6 +50,6 @@ services:
     volumes:
       - ./redis/redis.conf:/etc/redis/redis.conf
     environment:
-      - TZ=${TZ}
+      - TZ=Asia/Shanghai
     ports:
-      - "${REDIS_PORT}:6379"
+      - "6379:6379"
