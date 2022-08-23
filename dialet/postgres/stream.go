@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"bytes"
 
@@ -61,18 +61,26 @@ func WithContext(ctx context.Context) ServerOption {
 func generatePatch(a, b *ptypes_struct.Struct) (*ptypes_struct.Struct, error) {
 	abytes := &bytes.Buffer{}
 	bbytes := &bytes.Buffer{}
-	m := &jsonpb.Marshaler{}
 
 	if a != nil {
-		if err := m.Marshal(abytes, a); err != nil {
+		marByte, err := protojson.Marshal(a)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := abytes.Write(marByte); err != nil {
 			return nil, err
 		}
 	}
 	if b != nil {
-		if err := m.Marshal(bbytes, b); err != nil {
+		marByte, err := protojson.Marshal(b)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := bbytes.Write(marByte); err != nil {
 			return nil, err
 		}
 	}
+
 	if abytes.Len() == 0 {
 		abytes.Write([]byte("{}"))
 	}
@@ -84,9 +92,12 @@ func generatePatch(a, b *ptypes_struct.Struct) (*ptypes_struct.Struct, error) {
 		return nil, err
 	}
 	r := &ptypes_struct.Struct{}
-	rbytes := bytes.NewReader(p)
-	err = (&jsonpb.Unmarshaler{}).Unmarshal(rbytes, r)
-	return r, err
+
+	if err := protojson.Unmarshal(p, r); err != nil {
+		return nil, err
+	}
+
+	return r, nil
 }
 
 // FieldRedactions describes how redaction fields are specified.
@@ -257,7 +268,7 @@ func (s *Stream) fallbackLookup(e *Event) error {
 			return errors.Wrap(err, "fallback scan")
 		}
 		e.Payload = &ptypes_struct.Struct{}
-		if err := jsonpb.UnmarshalString(payload, e.Payload); err != nil {
+		if err := protojson.Unmarshal([]byte(payload), e.Payload); err != nil {
 			return errors.Wrap(err, "fallback unmarshal")
 		}
 	}
@@ -270,7 +281,7 @@ func (s *Stream) handleEvent(ev *pq.Notification, q chan string) error {
 	}
 
 	re := &RawEvent{}
-	if err := jsonpb.UnmarshalString(ev.Extra, re); err != nil {
+	if err := protojson.Unmarshal([]byte(ev.Extra), re); err != nil {
 		return errors.Wrap(err, "jsonpb unmarshal")
 	}
 

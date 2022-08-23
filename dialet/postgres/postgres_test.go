@@ -16,9 +16,9 @@ var (
 	testDatabaseDDL     = `create table if not exists notes_postgres (id serial, created_at timestamp, name varchar(100), note text)`
 	testInsert          = `insert into notes_postgres values (default, default, 'user1', 'here is a sample note')`
 	testDatabaseDropDDL = `drop table notes_postgres`
-	testInsertTemplate  = `insert into notes_postgres values (default, default, 'user1' '%s')`
-	testUpdate          = `update notes_postgres set note = 'here is an updated note' where id=1`
-	testUpdateTemplate  = `update notes_postgres set note = 'i%s' where id=1`
+	// testInsertTemplate  = `insert into notes_postgres values (default, default, 'user1' '%s')`
+	testUpdate = `update notes_postgres set note = 'here is an updated note' where id=1`
+	// testUpdateTemplate  = `update notes_postgres set note = 'i%s' where id=1`
 )
 
 type PostgresSuite struct {

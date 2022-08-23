@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/wwqdrh/datamanager/dialet/postgres"
-	"github.com/wwqdrh/datamanager/dialet/redis"
+	// "github.com/wwqdrh/datamanager/dialet/redis"
 )
 
 var (
 	_ IDialet = &postgres.PostgresDialet{}
-	_ IDialet = &redis.RedisDialet{}
+	// _ IDialet = &redis.RedisDialet{}
 
 	_ ILogData = &postgres.PostgresLog{}
 )

@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
 	ptypes_struct "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (
@@ -237,12 +237,12 @@ func Test_generatePatch(t *testing.T) {
 				t.Errorf("generatePatch() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			gotJSON, err := (&jsonpb.Marshaler{}).MarshalToString(got)
-			if err != nil {
-				t.Error(err)
-			}
-			if !cmp.Equal(gotJSON, tt.wantJSON) {
-				t.Errorf("generatePatch() = %v, want %v\n%s", gotJSON, tt.wantJSON, cmp.Diff(gotJSON, tt.wantJSON))
+			gotJSONByte, err := protojson.Marshal(got)
+			require.Nil(t, err)
+			getJSON := string(gotJSONByte)
+
+			if !cmp.Equal(getJSON, tt.wantJSON) {
+				t.Errorf("generatePatch() = %v, want %v\n%s", getJSON, tt.wantJSON, cmp.Diff(getJSON, tt.wantJSON))
 			}
 		})
 	}
