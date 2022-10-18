@@ -28,9 +28,9 @@ type WatcherSuite struct {
 }
 
 func TestWatcherSuite(t *testing.T) {
-	dsn := os.Getenv("DB_DSN")
+	dsn := os.Getenv("POSTGRES")
 	if dsn == "" {
-		t.Skip("dsn为空")
+		t.Skip("POSTGRES为空")
 	}
 
 	dial, err := postgres.NewPostgresDialet(dsn)

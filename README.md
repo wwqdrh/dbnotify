@@ -1,19 +1,30 @@
-<p align='center'>
-  <pre style="float:left;"> _ .-') _     ('-.     .-') _      ('-.     _   .-')      ('-.         .-') _    ('-.                   ('-.  _  .-')   
-( (  OO) )   ( OO ).-.(  OO) )    ( OO ).-.( '.( OO )_   ( OO ).-.    ( OO ) )  ( OO ).-.             _(  OO)( \( -O )  
- \     .'_   / . --. //     '._   / . --. / ,--.   ,--.) / . --. /,--./ ,--,'   / . --. /  ,----.    (,------.,------.  
- ,`'--..._)  | \-.  \ |'--...__)  | \-.  \  |   `.'   |  | \-.  \ |   \ |  |\   | \-.  \  '  .-./-')  |  .---'|   /`. ' 
- |  |  \  '.-'-'  |  |'--.  .--'.-'-'  |  | |         |.-'-'  |  ||    \|  | ).-'-'  |  | |  |_( O- ) |  |    |  /  | | 
- |  |   ' | \| |_.'  |   |  |    \| |_.'  | |  |'.'|  | \| |_.'  ||  .     |/  \| |_.'  | |  | .--, \(|  '--. |  |_.' | 
- |  |   / :  |  .-.  |   |  |     |  .-.  | |  |   |  |  |  .-.  ||  |\    |    |  .-.  |(|  | '. (_/ |  .--' |  .  '.' 
- |  '--'  /  |  | |  |   |  |     |  | |  | |  |   |  |  |  | |  ||  | \   |    |  | |  | |  '--'  |  |  `---.|  |\  \  
- `-------'   `--' `--'   `--'     `--' `--' `--'   `--'  `--' `--'`--'  `--'    `--' `--'  `------'   `------'`--' '--' </pre>
-</p>
+<div align="center">
+  <p>
+      <pre style="float:center">
+ _ .-') _   .-. .-')        .-') _                .-') _
+( (  OO) )  \  ( OO )      ( OO ) )              (  OO) )
+ \     .'_   ;-----.\  ,--./ ,--,'   .-'),-----. /     '._    ,-.-')     ,------.   ,--.   ,--.
+ ,`'--..._)  | .-.  |  |   \ |  |\  ( OO'  .-.  '|'--...__)   |  |OO) ('-| _.---'    \  `.'  /
+ |  |  \  '  | '-' /_) |    \|  | ) /   |  | |  |'--.  .--'   |  |  \ (OO|(_\      .-')     /
+ |  |   ' |  | .-. `.  |  .     |/  \_) |  |\|  |   |  |      |  |(_/ /  |  '--.  (OO  \   /
+ |  |   / :  | |  \  | |  |\    |     \ |  | |  |   |  |     ,|  |_.' \_)|  .--'   |   /  /\_
+ |  '--'  /  | '--'  / |  | \   |      `'  '-'  '   |  |    (_|  |      \|  |_)    `-./  /.__)
+ `-------'   `------'  `--'  `--'        `-----'    `--'      `--'       `--'        `--'
+  </pre>
+  </p>
+  <p>
 
-<p align='center'>
-方便地<sup><em>Datamanager</em></sup> 数据库管理工具
+  <p align='center'>
+方便地<sup><em>dbnotify</em></sup>数据变更通知工具
 <br> 
 </p>
+
+
+[![Build Status](https://github.com/wwqdrh/dbnotify/actions/workflows/push.yml/badge.svg)](https://github.com/wwqdrh/dbnotify/actions)
+[![codecov](https://codecov.io/gh/wwqdrh/dbnotify/branch/main/graph/badge.svg?token=LC47C9J0XZ)](https://codecov.io/gh/wwqdrh/dbnotify)
+
+  </p>
+</div>
 
 <br>
 
@@ -32,41 +43,25 @@
 - 📦 缓存一致性解决方案
 - 🗂 支持postgres
 
+
+## 示例
+
+- [缓存一致性](./examples/cacheupdate/README.md)
+- [基于http调用获取数据通知](./examples/httpnotify/README.md)
+
 ## 使用手册
 
 ### 开发环境搭建
 
-> for developer
+创建postgres环境并配置DSN至env文件(创建过程可参考`make env-postgres`)
 
-```bash
-docker stack deploy -c stack-dev.yaml datamanager
-```
-
-如何测试
-
-```bash
-修改makefile中的`ENV_DB_DSN`为本机的dsn环境
-
-执行`make cover -e DB_DSN="postgres://postgres:hui123456@localhost:5432/datamanager?sslmode=disable"`
-```
+`make test -e env=.env`
 
 ### 安装
 <br>
 
-*克隆到本地*
-
 ```bash
-git clone https://github.com/wwqdrh/datamanager.git
-
-// GOOS指定目标操作系统 GOARCH指定cpu指令集
-CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build cmd/dbmonitor/.
-```
-<br>
-
-*直接安装*
-
-```bash
-go install github.com/wwqdrh/datamanager/cmd/dbmonitor@latest
+go install github.com/wwqdrh/datamanager/cmd/dbnotify@latest
 ```
 
 ### 使用
@@ -82,8 +77,3 @@ dbmonitor -dsn postgres://[用户名]:[密码]@localhost:5432/datamanager\?sslmo
 
 <img src="./docs/img/示例.png" />
 <br>
-
-### 示例
-
-- [缓存一致性](./examples/cacheupdate/README.md)
-- [基于http调用获取数据通知](./examples/httpnotify/README.md)

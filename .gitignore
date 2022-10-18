@@ -1,5 +1,6 @@
 .tmp
 .vscode
+.env
 DEV.md
 version.db
 version

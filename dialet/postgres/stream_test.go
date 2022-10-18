@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"os"
 	"regexp"
@@ -19,44 +18,13 @@ import (
 )
 
 var (
-	testConnectionString         = "postgres://postgres:hui123456@localhost:5432/datamanager?sslmode=disable"
-	testConnectionStringTemplate = "postgres://postgres:hui123456@localhost:5432/%s?sslmode=disable"
-
 	testStreamDatabaseDDL = `create table if not exists notes_stream (id serial, created_at timestamp, name varchar(100), note text)`
-	testStreamInsert      = `insert into notes_stream values (default, default, 'user1', 'here is a sample note')`
+	// testStreamInsert      = `insert into notes_stream values (default, default, 'user1', 'here is a sample note')`
 	// testStreamInsertTemplate  = `insert into notes_steram values (default, default, 'user1', '%s')`
 	testStreamDatabaseDropDDL = `drop table notes_stream`
-	testStreamUpdate          = `update notes_stream set note = 'here is an updated note' where id=1`
+	// testStreamUpdate          = `update notes_stream set note = 'here is an updated note' where id=1`
 	// testStreamUpdateTemplate  = `update notes_stream set note = 'i%s' where id=1`
 )
-
-func testDBConn(t *testing.T, db *sql.DB, testcase string) (connectionString string, cleanup func()) {
-	s := fmt.Sprintf("test_pqstream_%s", testcase)
-	db.Exec(fmt.Sprintf("drop database %s", s))
-	_, err := db.Exec(fmt.Sprintf("create database %s", s))
-	if err != nil {
-		t.Fatal(err)
-	}
-	dsn := fmt.Sprintf(testConnectionStringTemplate, s)
-	newDB, err := sql.Open("postgres", dsn)
-	if err != nil {
-		t.Skip(err)
-	}
-	if err := db.Ping(); err != nil {
-		t.Skip(errors.Wrap(err, "ping"))
-	}
-	defer newDB.Close()
-	_, err = newDB.Exec(testStreamDatabaseDDL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return dsn, func() {
-		_, err := db.Exec(fmt.Sprintf("drop database %s", s))
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-}
 
 type StreamSuite struct {
 	suite.Suite
@@ -65,9 +33,9 @@ type StreamSuite struct {
 }
 
 func TestStreamSuite(t *testing.T) {
-	dsn := os.Getenv("DB_DSN")
+	dsn := os.Getenv("POSTGRES")
 	if dsn == "" {
-		t.Skip("dsn为空")
+		t.Skip("POSTGRES为空")
 	}
 
 	tableRe, err := regexp.Compile(".*")
@@ -140,107 +108,6 @@ func (s *StreamSuite) TestServerWithSubscribe() {
 	time.Sleep(3 * time.Second)
 }
 
-// Test Trigger Install and Uninstall
-func (s *StreamSuite) TestServerTriggers() {
-	tests := []struct {
-		name           string
-		re             string
-		nTimes         int
-		wantInstallErr bool
-		wantRemoveErr  bool
-	}{
-		{"basic", ".*", 1, false, false},
-		{"basic_nomatch", "nomatch", 1, true, false},
-		{"basic_drop", ".*", 2, false, false},
-	}
-	for _, tt := range tests {
-		s.T().Run(tt.name, func(t *testing.T) {
-			cs, cleanup := testDBConn(t, s.stream.db, tt.name)
-			defer cleanup()
-			s, err := NewServer(cs, WithTableRegexp(regexp.MustCompile(tt.re)))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer s.Close()
-			if err = s.InstallTriggers(); (err != nil) != tt.wantInstallErr {
-				t.Errorf("Server.InstallTriggers() error = %v, wantErr %v", err, tt.wantInstallErr)
-				return
-			}
-			for i := 0; i < tt.nTimes; i++ {
-				t.Log(i)
-				err = s.RemoveTriggers()
-				t.Log("remove:", err)
-				if i == tt.nTimes-1 && (err != nil) != tt.wantRemoveErr {
-					t.Errorf("Server.RemoveTriggers() error = %v, wantErr %v", err, tt.wantRemoveErr)
-				}
-			}
-		})
-	}
-}
-
-func (s *StreamSuite) TestHandleEvents() {
-	type testCase struct {
-		name    string
-		fn      func(*testing.T, *Stream)
-		wantErr bool
-	}
-	tests := []testCase{
-		{"basics", nil, false},
-		{"basic_insert", func(t *testing.T, s *Stream) {
-			if _, err := s.db.Exec(testStreamInsert); err != nil {
-				t.Fatal(err)
-			}
-		}, false},
-		{"basic_insert_and_update", func(t *testing.T, s *Stream) {
-			if _, err := s.db.Exec(testStreamInsert); err != nil {
-				t.Fatal(err)
-			}
-			time.Sleep(10 * time.Millisecond)
-			if _, err := s.db.Exec(testStreamUpdate); err != nil {
-				t.Fatal(err)
-			}
-		}, false},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		s.T().Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-			defer cancel()
-			cs, cleanup := testDBConn(t, s.stream.db, tt.name)
-			defer cleanup()
-			stream, err := NewServer(cs)
-			stream.listenerPingInterval = time.Second // move into a helper?
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			_, err = stream.db.Exec(testStreamDatabaseDDL)
-			if err != nil {
-				t.Fatal(err)
-			}
-			stream.InstallTriggers()
-
-			defer func() {
-				if err := stream.Close(); err != nil {
-					t.Error(err)
-				}
-			}()
-			go func(t *testing.T, tt testCase) {
-				assert.Nil(t, stream.HandleEvents(ctx, nil))
-			}(t, tt)
-			if tt.fn != nil {
-				tt.fn(t, stream)
-			}
-			if err := stream.RemoveTriggers(); err != nil {
-				t.Error(err)
-			}
-			<-ctx.Done()
-		})
-	}
-}
-
 func (s *StreamSuite) TestGeneratePatch() {
 	type args struct {
 		a *ptypes_struct.Struct
@@ -292,7 +159,7 @@ func (s *StreamSuite) TestServerRedactFields() {
 		},
 	}
 
-	srv, err := NewServer(testConnectionString, WithFieldRedactions(rfields))
+	srv, err := NewServer(os.Getenv("POSTGRES"), WithFieldRedactions(rfields))
 	if err != nil {
 		s.T().Fatal(err)
 	}
@@ -442,7 +309,7 @@ func (s *StreamSuite) TestWithTableRegexp() {
 	}
 	for _, tt := range tests {
 		s.T().Run(tt.name, func(t *testing.T) {
-			s, err := NewServer(testConnectionString, WithTableRegexp(re))
+			s, err := NewServer(os.Getenv("POSTGRES"), WithTableRegexp(re))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -471,7 +338,7 @@ func (s *StreamSuite) TestNewServer() {
 			connectionString: "",
 		}, nil, true},
 		{"good", args{
-			connectionString: testConnectionString,
+			connectionString: os.Getenv("POSTGRES"),
 		}, nil, false},
 	}
 	for _, tt := range tests {

@@ -12,6 +12,23 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+// func TestMain(m *testing.M) {
+// 	dsn := os.Getenv("POSTGRES")
+// 	if dsn == "" {
+// 		fmt.Println("POSTGRES为空")
+// 		os.Exit(1)
+// 	}
+
+// 	dial, err := NewPostgresDialet(dsn)
+// 	if err != nil {
+// 		fmt.Println(err.Error())
+// 		os.Exit(1)
+// 	}
+// 	// db = dial.stream.DB()
+
+// 	m.Run()
+// }
+
 var (
 	testDatabaseDDL     = `create table if not exists notes_postgres (id serial, created_at timestamp, name varchar(100), note text)`
 	testInsert          = `insert into notes_postgres values (default, default, 'user1', 'here is a sample note')`
@@ -28,9 +45,9 @@ type PostgresSuite struct {
 }
 
 func TestPostgresSuite(t *testing.T) {
-	dsn := os.Getenv("DB_DSN")
+	dsn := os.Getenv("POSTGRES")
 	if dsn == "" {
-		t.Skip("dsn为空")
+		t.Skip("POSTGRES")
 	}
 
 	dial, err := NewPostgresDialet(dsn)
